@@ -1,0 +1,34 @@
+# Entorno y secretos
+.env
+.secrets/*
+!.secrets/.gitkeep
+
+# Modelos GGUF (se descargan con scripts/download_model.sh)
+models/*
+!models/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Herramientas
+.ruff_cache/
+.mypy_cache/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store

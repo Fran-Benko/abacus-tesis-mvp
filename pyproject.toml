@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "argentgob-mesh"
+version = "0.1.0"
+description = "Middleware de gobernanza perimetral para agentes CrewAI (MVP de tesis)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Franco Benko" }]
+
+dependencies = [
+    "crewai==1.15.17",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.2",
+    "psycopg[binary]>=3.1",
+    "alembic>=1.13",
+    "duckduckgo-search>=6.2",
+    "yfinance>=0.2",
+    "requests>=2.31",
+    "structlog>=24.1",
+    "rich>=13.7",
+    "streamlit>=1.35",
+    "pandas>=2.2",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+argentgob = "argentgob.agent.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: pruebas de integración del flujo de gobernanza",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

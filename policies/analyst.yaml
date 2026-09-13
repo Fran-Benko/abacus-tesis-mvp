@@ -1,0 +1,17 @@
+profile: analyst
+policies:
+  - policy_id: "POL-analyst-001"
+    tool_name: "duckduckgo_news"
+    operation_class: "EXTERNAL_SEND"
+    effect: "ALLOW"
+    priority: 50
+  - policy_id: "POL-analyst-002"
+    tool_name: "stock_price"
+    operation_class: "READ"
+    effect: "ALLOW"
+    priority: 50
+  - policy_id: "POL-analyst-003"
+    tool_name: "crypto_price"
+    operation_class: "READ"
+    effect: "ALLOW"
+    priority: 50

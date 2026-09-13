@@ -1,0 +1,7 @@
+profile: admin
+policies:
+  - policy_id: "POL-admin-001"
+    tool_name: "*"
+    operation_class: "*"
+    effect: "ALLOW"
+    priority: 10

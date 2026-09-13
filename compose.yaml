@@ -1,0 +1,122 @@
+# argentgob-mesh-mvp/compose.yaml
+# Requiere: podman >= 4.6, podman-compose >= 1.1
+# Uso: podman compose up -d
+
+name: argentgob-mvp
+
+services:
+
+  # ─── LLM local (GPU CUDA) ───────────────────────────────────────────
+  llama-server:
+    image: ghcr.io/ggerganov/llama.cpp:server-cuda
+    # Montar el modelo descargado localmente (ver scripts/download_model.sh)
+    volumes:
+      - ./models:/models:ro,Z
+    command: >
+      --model /models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+      --host 0.0.0.0
+      --port 8080
+      --ctx-size 8192
+      --n-predict 2048
+      --n-gpu-layers -1
+      --parallel 1
+      --no-mmap
+      --log-disable
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s   # El modelo tarda en cargarse
+    # GPU NVIDIA via CDI (requiere nvidia-container-toolkit en WSL2)
+    devices:
+      - nvidia.com/gpu=all
+    restart: unless-stopped
+
+  # ─── Base de datos ─────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: argentgob
+      POSTGRES_USER: argentgob_app
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data:Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argentgob_app -d argentgob"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # ─── Migraciones (run-once) ────────────────────────────────────────
+  migrator:
+    build:
+      context: .
+      dockerfile: containers/agent.Containerfile
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql+psycopg://argentgob_app:${POSTGRES_PASSWORD}@postgres:5432/argentgob"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ─── Agente + middleware ────────────────────────────────────────────
+  agent:
+    build:
+      context: .
+      dockerfile: containers/agent.Containerfile
+    env_file: .env
+    environment:
+      # LLM local: apuntar al servidor llama.cpp
+      OPENAI_API_BASE: "http://llama-server:8080/v1"
+      OPENAI_API_KEY: "local-no-key-required"
+      OPENAI_MODEL_NAME: "llama-3.1-8b-instruct"
+      # Base de datos
+      DATABASE_URL: "postgresql+psycopg://argentgob_app:${POSTGRES_PASSWORD}@postgres:5432/argentgob"
+      # Configuración de gobernanza
+      ENVIRONMENT: "LOCAL"
+      LOG_LEVEL: "INFO"
+      MAX_PAYLOAD_BYTES: "65536"
+      MAX_JSON_DEPTH: "16"
+      RATE_LIMIT_CALLS_PER_RUN: "5"
+      AGENT_PROFILE: "${AGENT_PROFILE:-analyst}"
+    depends_on:
+      llama-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    # Modo interactivo para ingresar el ticker
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+  # ─── Dashboard Streamlit (incluido en MVP) ──────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: containers/dashboard.Containerfile
+    command: ["streamlit", "run", "src/argentgob/dashboard/app.py",
+              "--server.port=8501", "--server.address=0.0.0.0"]
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql+psycopg://argentgob_app:${POSTGRES_PASSWORD}@postgres:5432/argentgob"
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+secrets:
+  postgres_password:
+    file: .secrets/postgres_password

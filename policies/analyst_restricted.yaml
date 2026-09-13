@@ -1,0 +1,12 @@
+profile: analyst_restricted
+policies:
+  - policy_id: "POL-restricted-001"
+    tool_name: "stock_price"
+    operation_class: "READ"
+    effect: "ALLOW"
+    priority: 50
+  - policy_id: "POL-restricted-002"
+    tool_name: "crypto_price"
+    operation_class: "READ"
+    effect: "ALLOW"
+    priority: 50
