@@ -23,7 +23,7 @@ PROFILES: dict[str, AgentProfile] = {
         allowed_tools=["duckduckgo_news", "stock_price", "crypto_price"],
         active_guardrails=["query_injection", "topic_relevance", "rate_limit"],
         system_prompt_file="prompts/analyst.md",
-        max_tool_calls=10,
+        max_tool_calls=5,
     ),
     "analyst_restricted": AgentProfile(
         name="analyst_restricted",

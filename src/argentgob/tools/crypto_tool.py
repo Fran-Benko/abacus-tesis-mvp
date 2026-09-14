@@ -1,15 +1,21 @@
 """CryptoPriceTool: precio, market cap y variación 24h vía CoinGecko (API gratuita)."""
 import requests
+from pydantic import BaseModel, Field
 
 from argentgob.module_a.governed_tool import GovernedTool
 
 COINGECKO_API = "https://api.coingecko.com/api/v3"
 
 
+class CryptoPriceToolSchema(BaseModel):
+    coin_id: str = Field(description="Identificador de CoinGecko, por ejemplo bitcoin")
+
+
 class CryptoPriceTool(GovernedTool):
     """Consulta precios de criptomonedas en la API pública de CoinGecko."""
 
     name: str = "crypto_price"
+    args_schema: type[BaseModel] = CryptoPriceToolSchema
     description: str = (
         "Obtiene precio USD, market cap y variación 24h de una criptomoneda. "
         "Input: coin_id (str) en formato CoinGecko, Ej: 'bitcoin', 'ethereum', 'cardano'"

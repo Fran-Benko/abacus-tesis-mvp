@@ -8,7 +8,7 @@ services:
 
   # ─── LLM local (GPU CUDA) ───────────────────────────────────────────
   llama-server:
-    image: ghcr.io/ggerganov/llama.cpp:server-cuda
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     # Montar el modelo descargado localmente (ver scripts/download_model.sh)
     volumes:
       - ./models:/models:ro,Z
@@ -20,8 +20,7 @@ services:
       --n-predict 2048
       --n-gpu-layers -1
       --parallel 1
-      --no-mmap
-      --log-disable
+      --jinja
     ports:
       - "8080:8080"
     healthcheck:

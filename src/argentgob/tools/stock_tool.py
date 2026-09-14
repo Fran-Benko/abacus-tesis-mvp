@@ -1,13 +1,19 @@
 """StockPriceTool: precio actual, variación y volumen vía Yahoo Finance."""
 import yfinance as yf
+from pydantic import BaseModel, Field
 
 from argentgob.module_a.governed_tool import GovernedTool
+
+
+class StockPriceToolSchema(BaseModel):
+    ticker: str = Field(description="Símbolo bursátil, por ejemplo AAPL o MSFT")
 
 
 class StockPriceTool(GovernedTool):
     """Obtiene datos de mercado de una acción usando yfinance."""
 
     name: str = "stock_price"
+    args_schema: type[BaseModel] = StockPriceToolSchema
     description: str = (
         "Obtiene el precio actual, variación diaria y volumen de una acción. "
         "Input: ticker (str), Ej: 'AAPL', 'MSFT', 'GGAL.BA'"

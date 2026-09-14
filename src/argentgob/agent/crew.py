@@ -16,6 +16,10 @@ from argentgob.module_c.profiles import PROFILES
 from argentgob.tools.crypto_tool import CryptoPriceTool
 from argentgob.tools.news_tool import DuckDuckGoNewsTool
 from argentgob.tools.stock_tool import StockPriceTool
+from argentgob.observability.logger import get_logger
+
+
+log = get_logger(__name__)
 
 
 def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew:
@@ -56,14 +60,30 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
         ),
     }
     tools = [t for name, t in all_tools.items() if name in profile.allowed_tools]
+    log.info(
+        "crew_tools_configured",
+        profile=profile_name,
+        allowed_tools=profile.allowed_tools,
+        active_tools=[tool.name for tool in tools],
+        max_tool_calls=profile.max_tool_calls,
+    )
 
     # Configurar el LLM local (llama-server expone API compatible con OpenAI).
     llm = LLM(
         model=f"openai/{settings.openai_model_name}",
         base_url=settings.openai_api_base,
         api_key=settings.openai_api_key,
-        temperature=0.1,
-        max_tokens=2048,
+        temperature=0,
+        max_tokens=512,
+    )
+    llm.supports_function_calling = lambda: False
+    log.info(
+        "crew_llm_configured",
+        model=settings.openai_model_name,
+        base_url=settings.openai_api_base,
+        native_tool_calling=False,
+        temperature=0,
+        max_tokens=512,
     )
 
     # Definir agente y tarea.
@@ -75,6 +95,7 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
         llm=llm,
         verbose=True,
         max_iter=profile.max_tool_calls,
+        max_retry_limit=0,
     )
 
     analysis_task = Task(

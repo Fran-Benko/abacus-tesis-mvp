@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.description="Dashboard de observabilidad de Argen
 
 # Usuario no-root
 RUN groupadd --gid 1001 argentgob && \
-    useradd --uid 1001 --gid argentgob --no-create-home argentgob
+    useradd --uid 1001 --gid argentgob --create-home --home-dir /home/argentgob argentgob
 
 WORKDIR /app
 
@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copiar dependencias primero (cache de capas)
 COPY pyproject.toml README.md ./
+RUN mkdir -p src/argentgob && touch src/argentgob/__init__.py
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .
 
