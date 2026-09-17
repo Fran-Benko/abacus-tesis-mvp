@@ -13,14 +13,28 @@ from unittest.mock import MagicMock
 import pytest
 
 from argentgob.core.decision import PolicyDecision
-from argentgob.core.errors import GovernanceAction, HookAborted, ReasonCode
+from argentgob.core.errors import (
+    GovernanceAction,
+    HookAborted,
+    Obligation,
+    ReasonCode,
+)
 from argentgob.module_a.governance import GovernanceMiddleware
 from argentgob.module_a.spy_tool import SpyTool
 from argentgob.module_c.guardrails import GuardrailEngine
 
 
 def _decision(action: GovernanceAction, reason: ReasonCode) -> PolicyDecision:
-    return PolicyDecision(action=action, reason_code=reason)
+    # R2 — Frontera gobernada: una decisión PASS exige exactamente una
+    # obligación de selección de argumentos (por defecto, la original).
+    obligations = (
+        [Obligation.USE_ORIGINAL_ARGUMENTS]
+        if action == GovernanceAction.PASS
+        else []
+    )
+    return PolicyDecision(
+        action=action, reason_code=reason, obligations=obligations
+    )
 
 
 def _middleware(settings, abac_decision, mock_audit_writer, guards=None):
