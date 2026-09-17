@@ -92,15 +92,29 @@ class GDELTNewsProvider:
         endpoint: str = GDELT_DOC_ENDPOINT,
         timeout: float = REQUEST_TIMEOUT_SECONDS,
         session: requests.Session | None = None,
+        allowlist: Any | None = None,
     ):
         self.endpoint = endpoint
         self.timeout = timeout
         self.session = session or requests.Session()
         # Deshabilitar redirects: no se aceptan destinos no autorizados.
         self.session.max_redirects = 0
+        # R2 — Frontera gobernada: allowlist de hosts exactos.
+        if allowlist is None:
+            from argentgob.module_a.host_allowlist import HostAllowlist
+
+            allowlist = HostAllowlist({GDELT_HOST})
+        self.allowlist = allowlist
 
     def search(self, query: str, max_results: int) -> list[NewsItem]:
         """Consulta GDELT y parsea las noticias. Sin red en tests: se inyecta."""
+        # R2 — Frontera gobernada: verificar el host de destino antes del egress.
+        try:
+            self.allowlist.check_url(self.endpoint)
+        except Exception as exc:  # noqa: BLE001 - fallo de gobernanza
+            raise ProviderError(
+                ProviderErrorKind.GOVERNANCE, f"gdelt host no autorizado: {exc}"
+            ) from exc
         params = {
             "query": query,
             "mode": "artlist",
@@ -123,6 +137,18 @@ class GDELTNewsProvider:
             raise ProviderError(
                 ProviderErrorKind.PERMANENT, f"gdelt request error: {exc}"
             ) from exc
+
+        # R2 — Frontera gobernada: verificar que la respuesta no haya sido
+        # redirigida a un host no autorizado (redirect prohibido).
+        if resp.history:
+            for hop in resp.history:
+                try:
+                    self.allowlist.check_url(hop.url)
+                except Exception as exc:  # noqa: BLE001 - fallo de gobernanza
+                    raise ProviderError(
+                        ProviderErrorKind.GOVERNANCE,
+                        f"gdelt redirect a host no autorizado: {exc}",
+                    ) from exc
 
         if resp.status_code == 429:
             raise ProviderError(ProviderErrorKind.TRANSIENT, "gdelt rate limited")

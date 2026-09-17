@@ -97,6 +97,13 @@ class NewsTool(GovernedTool):
     ) -> str | None:
         """Busca con retries acotados. Retorna texto si hay resultado; None si falla."""
         for attempt in range(self.max_attempts):
+            # R2 ? Frontera gobernada: si la decisi?n venci? durante el backoff,
+            # abortar y exigir una nueva ejecuci?n gobernada (sin reintento).
+            if self._decision_expired():
+                raise ProviderError(
+                    ProviderErrorKind.GOVERNANCE,
+                    "decisi?n vencida durante backoff; se requiere nueva ejecuci?n gobernada",
+                )
             try:
                 items = provider.search(query, max_results=max_results)
             except ProviderError as exc:
