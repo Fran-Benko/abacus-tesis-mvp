@@ -37,9 +37,9 @@ Agente CrewAI  ──►  GovernedTool._run
 
 | Perfil               | Herramientas permitidas                  | Guardrails                                   |
 |----------------------|------------------------------------------|----------------------------------------------|
-| `analyst`            | duckduckgo_news, stock_price, crypto_price | query_injection, topic_relevance, rate_limit |
+| `analyst`            | news, stock_price, crypto_price          | query_injection, topic_relevance, rate_limit |
 | `analyst_restricted` | stock_price, crypto_price                | rate_limit                                   |
-| `admin`              | duckduckgo_news, stock_price, crypto_price | (ninguno — solo debug)                       |
+| `admin`              | news, stock_price, crypto_price          | (ninguno — solo debug)                       |
 
 ## Requisitos
 

@@ -59,7 +59,7 @@ class GuardrailEngine:
         self, envelope: ToolCallEnvelope
     ) -> tuple[bool, str | None]:
         """Solo permite búsquedas con términos financieros reconocibles."""
-        if envelope.tool_name != "duckduckgo_news":
+        if envelope.tool_name != "news":
             return True, None  # No aplica a herramientas de precio
         query = envelope.execution_arguments.get("query", "")
         if not _FINANCIAL_PATTERN.search(query):

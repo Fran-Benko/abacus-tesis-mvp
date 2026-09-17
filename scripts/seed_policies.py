@@ -22,7 +22,7 @@ log = get_logger("seed_policies")
 
 # Clase de operación por herramienta (MVP: todas son de lectura/consulta).
 _OPERATION_CLASS = {
-    "duckduckgo_news": "EXTERNAL_SEND",
+    "news": "EXTERNAL_SEND",
     "stock_price": "READ",
     "crypto_price": "READ",
 }

@@ -1,7 +1,7 @@
 profile: analyst
 policies:
   - policy_id: "POL-analyst-001"
-    tool_name: "duckduckgo_news"
+    tool_name: "news"
     operation_class: "EXTERNAL_SEND"
     effect: "ALLOW"
     priority: 50

@@ -3,7 +3,7 @@ from pydantic import ValidationError
 import pytest
 
 from argentgob.tools.crypto_tool import CryptoPriceToolSchema
-from argentgob.tools.news_tool import DuckDuckGoNewsToolSchema
+from argentgob.tools.news_tool import NewsToolSchema
 from argentgob.tools.stock_tool import StockPriceToolSchema
 from argentgob.agent.crew import build_analysis_crew
 
@@ -15,10 +15,10 @@ def test_stock_schema_requires_ticker():
 
 
 def test_news_schema_has_bounded_default():
-    schema = DuckDuckGoNewsToolSchema(query="AAPL")
+    schema = NewsToolSchema(query="AAPL")
     assert schema.max_results == 3
     with pytest.raises(ValidationError):
-        DuckDuckGoNewsToolSchema(query="AAPL", max_results=4)
+        NewsToolSchema(query="AAPL", max_results=4)
 
 
 def test_crypto_schema_requires_coin_id():

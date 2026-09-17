@@ -38,12 +38,6 @@ class GovernanceMiddleware:
         self.audit = audit
         # Registro temporal de decisiones por evento (para enlazar post_hook).
         self._decision_index: dict[str, str] = {}
-        self._unavailable_tools: set[str] = set()
-
-    def mark_provider_unavailable(self, tool_name: str) -> None:
-        """Evita repetir una herramienta cuyo proveedor falló en esta corrida."""
-        self._unavailable_tools.add(tool_name)
-        log.warning("tool_provider_unavailable", tool=tool_name)
 
     def pre_hook(
         self,
@@ -75,14 +69,6 @@ class GovernanceMiddleware:
             payload_size=envelope.payload_size_bytes,
             digest=envelope.payload_digest[:20] + "...",
         )
-
-        if tool_name in self._unavailable_tools:
-            self._block(
-                envelope,
-                ReasonCode.TOOL_PROVIDER_UNAVAILABLE,
-                "module_a.pep",
-                started,
-            )
 
         # 2. Validar límites de payload (antes del scanner costoso) — INV-14.
         if envelope.payload_size_bytes > self.settings.max_payload_bytes:

@@ -14,7 +14,7 @@ from argentgob.module_c.abac_evaluator import ABACEvaluator
 from argentgob.module_c.guardrails import GuardrailEngine
 from argentgob.module_c.profiles import PROFILES
 from argentgob.tools.crypto_tool import CryptoPriceTool
-from argentgob.tools.news_tool import DuckDuckGoNewsTool
+from argentgob.tools.news_tool import NewsTool
 from argentgob.tools.stock_tool import StockPriceTool
 from argentgob.observability.logger import get_logger
 
@@ -49,7 +49,7 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
 
     # Instanciar herramientas gobernadas según el perfil.
     all_tools = {
-        "duckduckgo_news": DuckDuckGoNewsTool(
+            "news": NewsTool(
             governance=middleware, agent_identity=agent_id
         ),
         "stock_price": StockPriceTool(
