@@ -37,6 +37,20 @@ class ToolCallEnvelope:
     received_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+    # R2 — Frontera gobernada.
+    # Argumentos efectivos que la herramienta debe usar (originales o
+    # transformados según la obligación de la decisión). Se fijan en el PEP.
+    effective_arguments: dict[str, Any] = field(default_factory=dict)
+    # Decisión de política asociada a este envelope (se fija en el PEP).
+    decision: Any = None
+
+    def verify_digest(self) -> bool:
+        """Verifica que el digest del envelope coincida con los argumentos.
+
+        R2 — Frontera gobernada: un digest incorrecto (tampering) bloquea la
+        ejecución antes del side effect.
+        """
+        return _canonical_digest(self.execution_arguments) == self.payload_digest
 
     @staticmethod
     def build(
