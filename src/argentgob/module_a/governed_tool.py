@@ -12,7 +12,7 @@ from typing import Any, Optional
 from crewai.tools import BaseTool
 from pydantic import ConfigDict
 
-from argentgob.core.envelope import AgentIdentity
+from argentgob.core.envelope import AgentIdentity, ToolCallEnvelope
 from argentgob.core.errors import HookAborted
 from argentgob.module_a.governance import GovernanceMiddleware
 from argentgob.observability.logger import get_logger
@@ -31,6 +31,20 @@ class GovernedTool(BaseTool):
     resource: str = "unspecified"
     governance: Optional[GovernanceMiddleware] = None
     agent_identity: Optional[AgentIdentity] = None
+    # R2 ? Frontera gobernada: envelope de la ejecuci?n en curso, para que la
+    # herramienta verifique la vigencia de la decisi?n durante backoff.
+    _current_envelope: Optional[ToolCallEnvelope] = None
+
+    def _decision_expired(self) -> bool:
+        """R2 ? True si la decisi?n de la ejecuci?n en curso venci?.
+
+        Si la decisi?n vence durante un backoff, la herramienta debe abortar
+        y exigir una nueva ejecuci?n gobernada (sin reintento autom?tico).
+        """
+        env = self._current_envelope
+        if env is None or env.decision is None:
+            return False
+        return bool(env.decision.is_expired())
 
     def _run(self, **kwargs: Any) -> str:
         """Flujo de ejecución gobernada.
@@ -54,8 +68,15 @@ class GovernedTool(BaseTool):
                 resource=self.resource,
                 execution_arguments=kwargs,
             )
+            # R2 ? Frontera gobernada: la herramienta usa los argumentos
+            # efectivos fijados por el PEP (originales o transformados seg?n
+            # la obligaci?n de la decisi?n), nunca una vista previa.
+            effective = envelope.effective_arguments or kwargs
+            # Se expone el envelope actual para que la herramienta pueda
+            # verificar la vigencia de la decisi?n durante backoff (R2).
+            self._current_envelope = envelope
             try:
-                result = self._execute(**kwargs)
+                result = self._execute(**effective)
                 self.governance.post_hook(
                     envelope=envelope, result=result, error=None
                 )

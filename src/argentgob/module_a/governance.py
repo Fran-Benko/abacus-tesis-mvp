@@ -11,8 +11,17 @@ from typing import Any
 
 from argentgob.core.config import Settings
 from argentgob.core.envelope import AgentIdentity, ToolCallEnvelope
-from argentgob.core.errors import GovernanceAction, HookAborted, ReasonCode
+from argentgob.core.errors import (
+    GovernanceAction,
+    HookAborted,
+    Obligation,
+    ReasonCode,
+)
 from argentgob.db.audit import AuditWriter
+from argentgob.module_b.argument_transforms import (
+    ArgumentTransformError,
+    select_effective_arguments,
+)
 from argentgob.module_b.sanitizer import Sanitizer
 from argentgob.module_c.abac_evaluator import ABACEvaluator
 from argentgob.module_c.guardrails import GuardrailEngine
@@ -70,7 +79,7 @@ class GovernanceMiddleware:
             digest=envelope.payload_digest[:20] + "...",
         )
 
-        # 2. Validar límites de payload (antes del scanner costoso) — INV-14.
+        # 2. Validar l?mites de payload (antes del scanner costoso) ? INV-14.
         if envelope.payload_size_bytes > self.settings.max_payload_bytes:
             self._block(
                 envelope,
@@ -79,17 +88,49 @@ class GovernanceMiddleware:
                 started,
             )
 
-        # 3. Sanitizar para telemetría (Módulo B).
+        # 3. R2 ? Frontera gobernada: verificar integridad del payload.
+        #    Un digest incorrecto (tampering) bloquea antes del side effect.
+        if not envelope.verify_digest():
+            self._block(
+                envelope,
+                ReasonCode.DIGEST_MISMATCH,
+                "module_a.pep",
+                started,
+            )
+
+        # 4. R2 ? Frontera gobernada: identidad completa.
+        #    Una identidad incompleta no autoriza la ejecuci?n (fail-closed).
+        if not self._identity_complete(agent):
+            self._block(
+                envelope,
+                ReasonCode.INCOMPLETE_IDENTITY,
+                "module_a.pep",
+                started,
+            )
+
+        # 5. Sanitizar para telemetr?a (M?dulo B).
         envelope.telemetry_arguments = self.sanitizer.sanitize(execution_arguments)
 
-        # 4. Evaluar política ABAC (Módulo C).
+        # 6. Evaluar pol?tica ABAC (M?dulo C).
         decision = self.abac.evaluate(envelope)
+        envelope.decision = decision
+
+        # R2 ? Frontera gobernada: decisi?n vencida durante el enforcement.
+        #    Una decisi?n vencida no autoriza; se aborta y se exige una nueva
+        #    ejecuci?n gobernada (sin reintento autom?tico).
+        if decision.is_expired():
+            self._block(
+                envelope,
+                ReasonCode.DECISION_EXPIRED,
+                "module_a.pep",
+                started,
+            )
 
         if decision.action == GovernanceAction.BLOCK:
             latency_pre_ms = (time.perf_counter() - started) * 1000
             log.warning(
                 "policy_block",
-                evento="⛔ POLICY BLOCK",
+                evento="? POLICY BLOCK",
                 tool=tool_name,
                 reason=decision.reason_code.value,
                 decision_id=decision.decision_id,
@@ -102,7 +143,42 @@ class GovernanceMiddleware:
                 source="argentgob.pep",
             )
 
-        # 5. Ejecutar guardrails del dominio (Módulo C).
+        # R2 ? Frontera gobernada: HITL exige aprobaci?n humana.
+        #    En R2 la aprobaci?n humana no est? implementada (es H6), por lo
+        #    que HITL NO ejecuta la herramienta (cero requests no autorizados).
+        if decision.action == GovernanceAction.HITL:
+            latency_pre_ms = (time.perf_counter() - started) * 1000
+            log.warning(
+                "policy_hitl",
+                evento="? HITL REQUIRED",
+                tool=tool_name,
+                reason=decision.reason_code.value,
+                decision_id=decision.decision_id,
+            )
+            self.audit.record_decision(
+                envelope, decision, latency_pre_ms=latency_pre_ms
+            )
+            raise HookAborted(
+                reason=f"blocked:{ReasonCode.HUMAN_APPROVAL_REQUIRED.value}",
+                source="argentgob.pep",
+            )
+
+        # R2 ? Frontera gobernada: selecci?n de argumentos.
+        #    Exige exactamente una obligaci?n (USE_ORIGINAL o USE_TRANSFORMED).
+        #    Ninguna o ambas producen POLICY_CONFLICT y cero ejecuci?n.
+        try:
+            envelope.effective_arguments = select_effective_arguments(
+                execution_arguments, decision.obligations
+            )
+        except ArgumentTransformError as exc:
+            self._block(
+                envelope,
+                exc.reason,
+                "module_b.argument_transforms",
+                started,
+            )
+
+# 7. Ejecutar guardrails del dominio (Módulo C).
         for guard_name, passed, guard_reason in self.guardrails.run_all(envelope):
             if not passed:
                 latency_pre_ms = (time.perf_counter() - started) * 1000
@@ -201,6 +277,19 @@ class GovernanceMiddleware:
         )
         raise HookAborted(reason=f"blocked:{reason.value}", source=source)
 
+    @staticmethod
+    def _identity_complete(agent: AgentIdentity) -> bool:
+        """R2 ? Frontera gobernada: identidad completa (fail-closed).
+
+        Una identidad incompleta (sin id, rol o versi?n) no autoriza la
+        ejecuci?n. Se exige que todos los campos de identidad est?n presentes.
+        """
+        return bool(
+            agent
+            and getattr(agent, "id", None)
+            and getattr(agent, "role", None)
+            and getattr(agent, "version", None)
+        )
 
 def _reason_from_guardrail(guard_reason: str | None) -> ReasonCode:
     """Mapea el motivo textual de un guardrail a un ReasonCode conocido."""

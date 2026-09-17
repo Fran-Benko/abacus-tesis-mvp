@@ -11,7 +11,7 @@ INV-11: una política vencida o inconsistente no autoriza. Ante duda -> BLOCK
 from argentgob.core.config import Settings
 from argentgob.core.decision import PolicyDecision
 from argentgob.core.envelope import ToolCallEnvelope
-from argentgob.core.errors import GovernanceAction, ReasonCode
+from argentgob.core.errors import GovernanceAction, Obligation, ReasonCode
 from argentgob.module_c.profiles import AgentProfile
 from argentgob.observability.logger import get_logger
 
@@ -40,6 +40,9 @@ class ABACEvaluator:
                 action=GovernanceAction.PASS,
                 reason_code=ReasonCode.ALLOWED,
                 policy_id=f"POL-{self.profile.name}-{envelope.tool_name}",
+                # R2 ? Frontera gobernada: la selecci?n de argumentos exige
+                # exactamente una obligaci?n. Por defecto se usa la original.
+                obligations=[Obligation.USE_ORIGINAL_ARGUMENTS],
             )
 
         log.warning(
