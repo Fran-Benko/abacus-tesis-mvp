@@ -29,7 +29,7 @@ git config core.sshCommand 'C:/Windows/System32/OpenSSH/ssh.exe'
 
 ## Baseline de tests
 
-- **86 tests pasan** (baseline 78 → +8 R5) vía:
+- **87 tests pasan** (baseline 78 → +8 R5 → +1 logger) vía:
   `podman run --rm -v "${PWD}:/app" -w /app argentgob-mvp-agent:latest python -m pytest tests/ -q`
 - **Ruff NO está instalado** en la imagen del agente.
 
@@ -69,6 +69,49 @@ podman build -t argentgob-mvp-agent:latest -f containers/agent.Containerfile .
    - GDELT permanente → fallback DDG.
    - GDELT agotado (transitorio x4) → fallback DDG.
    - Verifica no-leak en cada escenario y muestra la evidencia JSON sanitizada.
+
+## Fix del logger (descubierto en validación E2E)
+
+Durante la validación E2E se detectó que los logs INFO (incluidos los
+`news_provider_attempt` del R5) **no se emitían** en producción. Causa: el
+`LoggerFactory` de structlog delega al módulo `logging` estándar, que filtra por
+el nivel del root logger (WARNING por defecto). Aunque structlog estuviera
+configurado para emitir INFO, el root logger los descartaba silenciosamente.
+
+Fix en `src/argentgob/observability/logger.py`:
+`logging.getLogger().setLevel(getattr(logging, level.upper(), logging.INFO))`
+dentro de `setup_logging()`. Se agregó un test en `tests/unit/test_logger.py`
+que verifica que el nivel del root logger se alinea y que los eventos INFO se
+emiten. Commit `6e5f4c6`.
+
+## Validación E2E (integración real)
+
+Se ejecutó la integración E2E con el LLM local (localhost:8080) y el perfil
+`analyst`:
+
+```bash
+podman run --rm --network host -v "${PWD}:/app" -w /app \
+  -e OPENAI_API_BASE=http://localhost:8080/v1 \
+  -e OPENAI_API_KEY=local-no-key-required \
+  -e OPENAI_MODEL_NAME=llama-3.1-8b-instruct \
+  -e ENVIRONMENT=LOCAL -e LOG_LEVEL=INFO \
+  argentgob-mvp-agent:latest python -m argentgob.agent.main AAPL --profile analyst
+```
+
+Resultados verificados:
+- ✅ **stock_price** funciona (precio real $336.13, variación, volumen).
+- ✅ **Gobernanza** funciona (`tool_call_complete`, `post_hook_complete`, audit).
+- ✅ **R5 logging** funciona: logs `news_provider_attempt` con `event_id`,
+  `decision_id`, `provider`, `attempt`, `status`, `duration_ms`.
+- ✅ **No-leak** verificado programáticamente: sin query/url/headers/body/exception.
+- ✅ **Fallback GDELT→DDG** funciona (4 intentos GDELT + 4 intentos DDG).
+- ✅ **Reporte** se genera y `agent_run_complete` = SUCCESS.
+
+Nota: en la ejecución final los proveedores externos (GDELT/DDG) estaban con
+rate limiting, por lo que el informe reportó "No se pudieron obtener noticias".
+Esto es un problema externo temporal, no del código. Una ejecución previa sí
+obtuvo noticias reales (Zacks, Yahoo Finance), confirmando el flujo completo
+cuando los proveedores responden.
 
 ## Requisito 1 de R5 (perfil restringido sin búsqueda)
 
