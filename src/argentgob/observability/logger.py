@@ -9,6 +9,10 @@ import structlog
 
 def setup_logging(level: str = "INFO") -> None:
     """Configura el sistema de logging estructurado con salida de consola."""
+    # El LoggerFactory de structlog delega al módulo logging estándar, que
+    # filtra por el nivel del root logger. Sin esto, los logs INFO/DEBUG se
+    # descartan aunque structlog esté configurado para emitirlos.
+    logging.getLogger().setLevel(getattr(logging, level.upper(), logging.INFO))
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
