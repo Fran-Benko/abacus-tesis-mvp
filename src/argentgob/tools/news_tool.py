@@ -15,11 +15,13 @@ Política de fallos (R1):
 - Ambos vacíos válidos: informar sin noticias.
 - Vacío + proveedor fallido: informar búsqueda incompleta/error seguro. No inventar resultados.
 """
+import time
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from argentgob.module_a.governed_tool import GovernedTool
+from argentgob.observability.logger import get_logger
 from argentgob.tools.news_providers import (
     DuckDuckGoNewsProvider,
     GDELTNewsProvider,
@@ -31,6 +33,8 @@ from argentgob.tools.news_providers import (
     compute_backoff_delay,
     sleep_fn,
 )
+
+log = get_logger(__name__)
 
 
 class NewsToolSchema(BaseModel):
@@ -97,36 +101,77 @@ class NewsTool(GovernedTool):
     ) -> str | None:
         """Busca con retries acotados. Retorna texto si hay resultado; None si falla."""
         for attempt in range(self.max_attempts):
-            # R2 ? Frontera gobernada: si la decisi?n venci? durante el backoff,
-            # abortar y exigir una nueva ejecuci?n gobernada (sin reintento).
+            # R2 ? Frontera gobernada: si la decisión venció durante el backoff,
+            # abortar y exigir una nueva ejecución gobernada (sin reintento).
             if self._decision_expired():
                 raise ProviderError(
                     ProviderErrorKind.GOVERNANCE,
-                    "decisi?n vencida durante backoff; se requiere nueva ejecuci?n gobernada",
+                    "decisión vencida durante backoff; se requiere nueva ejecución gobernada",
                 )
+            started = time.perf_counter()
             try:
                 items = provider.search(query, max_results=max_results)
             except ProviderError as exc:
+                duration_ms = round((time.perf_counter() - started) * 1000, 2)
                 if exc.kind == ProviderErrorKind.GOVERNANCE:
                     # Fallo de gobernanza: abortar, nunca fallback.
                     raise
                 if exc.kind == ProviderErrorKind.PERMANENT:
                     # Sin retry; fallback solo si permanece autorizado.
-                    log_provider_failure(provider, attempt, exc)
+                    self._log_attempt(provider, attempt, "PERMANENT", duration_ms)
                     return None
                 # Transitorio: retry con backoff acotado.
-                log_provider_failure(provider, attempt, exc)
+                self._log_attempt(provider, attempt, "TRANSIENT", duration_ms)
                 if attempt < self.max_attempts - 1:
                     sleep_fn(compute_backoff_delay(attempt))
                 continue
 
+            duration_ms = round((time.perf_counter() - started) * 1000, 2)
             if items:
+                self._log_attempt(provider, attempt, "SUCCESS", duration_ms)
                 return self._format_items(provider, items)
             # Resultado vacío válido: pasar al siguiente proveedor sin retry.
+            self._log_attempt(provider, attempt, "EMPTY", duration_ms)
             return None
 
         # Se agotaron los reintentos transitorios.
         return None
+
+    def _attempt_context(self) -> dict[str, str]:
+        """Contexto de correlación sanitizado del envelope en curso (R5).
+
+        Expone `event_id` y `decision_id` para enlazar los logs de intentos con
+        la ejecución gobernada. NUNCA expone query, URLs, headers ni payload.
+        """
+        env = self._current_envelope
+        if env is None:
+            return {}
+        ctx: dict[str, str] = {"event_id": env.event_id}
+        if env.decision is not None:
+            ctx["decision_id"] = env.decision.decision_id
+        return ctx
+
+    def _log_attempt(
+        self,
+        provider: NewsProvider,
+        attempt: int,
+        status: str,
+        duration_ms: float,
+    ) -> None:
+        """Registra un intento de proveedor de forma sanitizada (R5).
+
+        Incluye correlación (event_id/decision_id), proveedor, intento, estado y
+        duración. NO loggea query, URL completa del request, headers, cuerpo ni
+        excepción cruda. NO crea resultados de ejecución por cada retry.
+        """
+        log.info(
+            "news_provider_attempt",
+            **self._attempt_context(),
+            provider=provider.name,
+            attempt=attempt,
+            status=status,
+            duration_ms=duration_ms,
+        )
 
     def _format_items(self, provider: NewsProvider, items: list[NewsItem]) -> str:
         """Formatea las noticias en el formato de salida conservado."""
@@ -138,16 +183,3 @@ class NewsTool(GovernedTool):
                 lines.append(f"   {r.body[:200]}...")
             lines.append("")
         return "\n".join(lines)
-
-
-def log_provider_failure(provider: NewsProvider, attempt: int, exc: ProviderError) -> None:
-    """Registra un fallo de proveedor de forma sanitizada (sin query ni URLs)."""
-    from argentgob.observability.logger import get_logger
-
-    log = get_logger(__name__)
-    log.warning(
-        "news_provider_failure",
-        provider=provider.name,
-        attempt=attempt,
-        kind=exc.kind.value,
-    )
