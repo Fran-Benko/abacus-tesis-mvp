@@ -11,6 +11,7 @@ Uso:
 Requiere que las migraciones ya se hayan aplicado (make start ejecuta el
 migrator) y que DATABASE_URL apunte a la base correcta.
 """
+import json
 import sys
 
 from argentgob.db.connection import get_connection
@@ -27,6 +28,11 @@ _OPERATION_CLASS = {
     "crypto_price": "READ",
 }
 
+# Obligación por defecto para políticas ALLOW: usar los argumentos originales.
+# Es obligatorio tener exactamente una obligación de selección; de lo contrario
+# el DeterministicEvaluator rechaza el PASS con POLICY_CONFLICT (H5/H6).
+_DEFAULT_OBLIGATIONS = ["USE_ORIGINAL_ARGUMENTS"]
+
 
 def seed() -> int:
     """Inserta las políticas ALLOW de todos los perfiles. Retorna el total insertado."""
@@ -42,20 +48,22 @@ def seed() -> int:
                         """
                         INSERT INTO governance_policies (
                             policy_id, profile_name, tool_name,
-                            operation_class, effect, priority
+                                                operation_class, effect, priority, obligations
                         ) VALUES (
                             %(policy_id)s, %(profile)s, %(tool)s,
-                            %(op_class)s, 'ALLOW', 50
+                                                %(op_class)s, 'ALLOW', 50, %(obligations)s
                         )
-                        ON CONFLICT (policy_id) DO NOTHING
-                        """,
+                        ON CONFLICT (policy_id) DO UPDATE SET
+                                                    obligations = EXCLUDED.obligations
+                                                """,
                         {
                             "policy_id": policy_id,
                             "profile": profile.name,
                             "tool": tool,
                             "op_class": op_class,
-                        },
-                    )
+                                                "obligations": json.dumps(_DEFAULT_OBLIGATIONS),
+                                            },
+                                        )
                     insertadas += cur.rowcount
                     log.info(
                         "policy_seeded",

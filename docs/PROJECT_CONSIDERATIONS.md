@@ -64,7 +64,8 @@ podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest 
 ```
 
 Grep de los resumenes para conocer el baseline histórico:
-baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = **102 passed**.
+baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 =
+**126 passed**.
 
 ### 3.2 Tests de integración
 
@@ -137,8 +138,11 @@ postgres o con un runner):
 - `governance_decisions` — decisiones correlacionadas (PASS/ALLOWED).
 - `news_provider_attempt` (log) — intentos sanitizados de proveedor de noticias
   con correlación `event_id`, sin raw/bearer/headers.
-- `policy_decisions`, `execution_results`, `audit_chain` (H5) — preparadas; hoy
-  vacías hasta integrar `DeterministicEvaluator` en el flujo de ejecución (H6/H7).
+- `policy_decisions`, `execution_results`, `audit_chain` (H5) — tablas del
+  round-trip H5 y de la ejecución gobernada H6. En una corrida E2E permisiva
+  (PASS) siguen en 0: `AuditWriter` persiste `governance_decisions`/
+  `governance_events`, y `execution_results` se puebla por la ruta de ejecución
+  gobernada (HITL/`ExecutionOrchestrator`) que requiere una aprobación humana.
 - Vista `v_governance_console` — une `policy_decisions` + `execution_results`.
 
 ---
@@ -193,5 +197,9 @@ postgres o con un runner):
 - Track R (R1–R5): **completo**.
 - H5 — Policy Engine persistente: **completo** (migración 002 aplicada, 15 tests
   propios, merge a `main` en `d74376f`).
-- Próximo hito según plan: **H6 — Aprobación humana durable y ejecución gobernada**
-  (ver resúmenes de sesión para análisis detallado).
+- H6 — Aprobación humana durable y ejecución gobernada: **completo** (paquete
+  `src/argentgob/hitl/`, hook HITL durable en el PEP, crew con
+  `DeterministicEvaluator`/`PolicyStore` + servcios HITL, 24 tests propios →
+  baseline 126 passed). Merge a `main` pendiente.
+- Próximo hito según plan: **H7 — Auditoría detectable ante manipulación** (ver
+  resúmenes de sesión para análisis detallado).

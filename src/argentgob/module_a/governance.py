@@ -6,7 +6,10 @@ guardrails), y persiste la evidencia vía AuditWriter.
 INV-01/INV-02: el executor de la herramienta nunca corre antes de una decisión
 válida, y un BLOCK aborta la tentativa antes del side effect.
 """
+import hashlib
+import json
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from argentgob.core.config import Settings
@@ -25,9 +28,18 @@ from argentgob.module_b.argument_transforms import (
 from argentgob.module_b.sanitizer import Sanitizer
 from argentgob.module_c.abac_evaluator import ABACEvaluator
 from argentgob.module_c.guardrails import GuardrailEngine
+from argentgob.hitl.errors import HitlError
 from argentgob.observability.logger import get_logger
 
 log = get_logger(__name__)
+
+
+def _argument_digest(args: Any) -> str:
+    """Digest SHA-256 de los argumentos originales (para la approval H6)."""
+    canonical = json.dumps(
+        args, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 class GovernanceMiddleware:
@@ -39,12 +51,23 @@ class GovernanceMiddleware:
         abac: ABACEvaluator,
         guardrails: GuardrailEngine,
         audit: AuditWriter,
+        *,
+        hold=None,
+        approval_service=None,
+        notifier=None,
     ):
         self.settings = settings
         self.sanitizer = Sanitizer(settings)
         self.abac = abac
         self.guardrails = guardrails
         self.audit = audit
+        # Servicios H6 (aprobación humana durable). Opcionales: si no están
+        # inyectados, el flujo HITL degrada al comportamiento R2 (bloquear sin
+        # perseguir la aprobación humana). Inyectarlos habilita el protocolo
+        # completo (hold + approval durable + notificación).
+        self.hold = hold
+        self.approval_service = approval_service
+        self.notifier = notifier
         # Registro temporal de decisiones por evento (para enlazar post_hook).
         self._decision_index: dict[str, str] = {}
 
@@ -155,6 +178,46 @@ class GovernanceMiddleware:
                 reason=decision.reason_code.value,
                 decision_id=decision.decision_id,
             )
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(
+                seconds=self.settings.approval_ttl_seconds
+            )
+            idempotency_key = f"hitl:{envelope.event_id}"
+            argument_digest = _argument_digest(envelope.execution_arguments)
+
+            if self.approval_service is not None and self.hold is not None:
+                try:
+                    approval, token_id, token_plan = (
+                        self.approval_service.create_pending_and_issue_token(
+                            event_id=envelope.event_id,
+                            decision_id=decision.decision_id,
+                            agent_id=envelope.agent.id,
+                            tool_name=envelope.tool_name,
+                            argument_digest=argument_digest,
+                            idempotency_key=idempotency_key,
+                            argued_at=now,
+                            expires_at=expires_at,
+                            hold_registered=lambda: self._register_hold(
+                                envelope, expires_at
+                            ),
+                        )
+                    )
+                    if token_id is not None and self.notifier is not None:
+                        self.notifier.notify_approval_pending(
+                            envelope=envelope,
+                            approval_id=approval.approval_id,
+                            idempotency_key=idempotency_key,
+                            expires_at=expires_at,
+                            destination=None,
+                            sanitized_preview=envelope.telemetry_arguments,
+                        )
+                except HitlError as exc:
+                    log.warning(
+                        "policy_hitl_service_error",
+                        evento="? HITL REQUIRED (error de servicio)",
+                        tool=tool_name,
+                        error=str(exc),
+                    )
             self.audit.record_decision(
                 envelope, decision, latency_pre_ms=latency_pre_ms
             )
@@ -290,6 +353,36 @@ class GovernanceMiddleware:
             and getattr(agent, "role", None)
             and getattr(agent, "version", None)
         )
+
+
+    def _register_hold(
+        self, envelope: ToolCallEnvelope, expires_at: datetime
+    ) -> bool:
+        """Registra el hold idempotente de los argumentos (H6).
+
+        Devolverá True si el hold quedó registrado, o False si el servicio de
+        hold no está disponible (el token no se emite en ese caso).
+        """
+        if self.hold is None:
+            return False
+        try:
+            self.hold.hold(
+                event_id=envelope.event_id,
+                tool_name=envelope.tool_name,
+                agent_id=envelope.agent.id,
+                argument=envelope.execution_arguments,
+                expires_at=expires_at,
+            )
+            return True
+        except Exception:
+            log.warning(
+                "policy_hitl_hold_error",
+                evento="? HITL REQUIRED (hold falló)",
+                tool=envelope.tool_name,
+                event_id=envelope.event_id,
+            )
+            return False
+
 
 def _reason_from_guardrail(guard_reason: str | None) -> ReasonCode:
     """Mapea el motivo textual de un guardrail a un ReasonCode conocido."""

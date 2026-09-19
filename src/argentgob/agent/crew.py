@@ -9,9 +9,13 @@ from crewai import LLM, Agent, Crew, Task
 from argentgob.core.config import get_settings
 from argentgob.core.envelope import AgentIdentity
 from argentgob.db.audit import AuditWriter
+from argentgob.hitl.approval_service import ApprovalService
+from argentgob.hitl.argument_hold import InMemoryArgumentHold
+from argentgob.hitl.notifier import ApprovalNotifier, ConsoleNotifier
 from argentgob.module_a.governance import GovernanceMiddleware
-from argentgob.module_c.abac_evaluator import ABACEvaluator
+from argentgob.module_c.deterministic_evaluator import DeterministicEvaluator
 from argentgob.module_c.guardrails import GuardrailEngine
+from argentgob.module_c.policy_store import PolicyStore
 from argentgob.module_c.profiles import PROFILES
 from argentgob.tools.crypto_tool import CryptoPriceTool
 from argentgob.tools.news_tool import NewsTool
@@ -36,15 +40,26 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
     # Identidad del agente.
     agent_id = AgentIdentity(id=f"agent-{profile_name}", role=profile_name)
 
-    # Configurar el middleware de gobernanza.
-    abac = ABACEvaluator(settings=settings, profile=profile)
+    # Configurar el middleware de gobernanza (H5: evaluador determinista con
+    # políticas persistentes; H6: servicios de aprobación humana durable).
+    policy_store = PolicyStore(settings=settings)
+    evaluator = DeterministicEvaluator(settings=settings, policy_source=policy_store)
     guardrails = GuardrailEngine(
         profile_guardrails=profile.active_guardrails,
         rate_limit=settings.rate_limit_calls_per_run,
     )
     audit = AuditWriter(settings=settings)
+    hold = InMemoryArgumentHold(settings=settings)
+    approval_service = ApprovalService(settings=settings)
+    notifier = ApprovalNotifier(channel=ConsoleNotifier())
     middleware = GovernanceMiddleware(
-        settings=settings, abac=abac, guardrails=guardrails, audit=audit
+        settings=settings,
+        abac=evaluator,
+        guardrails=guardrails,
+        audit=audit,
+        hold=hold,
+        approval_service=approval_service,
+        notifier=notifier,
     )
 
     # Instanciar herramientas gobernadas según el perfil.

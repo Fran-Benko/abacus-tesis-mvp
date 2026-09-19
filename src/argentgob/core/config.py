@@ -1,6 +1,7 @@
 """Settings con pydantic-settings. Valida al inicio de la aplicación."""
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +34,34 @@ class Settings(BaseSettings):
     max_string_bytes: int = 4096
     privacy_scan_timeout_ms: int = 25
     rate_limit_calls_per_run: int = 5
+
+    # H6 — Aprobación humana durable y ejecución gobernada.
+    # Límite superior de argumentos que pueden mantenerse en el hold en
+    # memoria (InMemoryArgumentHold). Positivo, obligatorio en TEST y nunca
+    # superior a `max_payload_bytes` (norma H6, Unidad 1).
+    max_held_argument_bytes: int = 32768
+    # Cota total efectiva del hold en memoria (no acumular bytes ilimitados).
+    max_held_total_bytes: int = 262144
+    # TTL del hold en memoria. No supera el timeout de aprobación.
+    hold_ttl_seconds: int = 300
+    # TTL de una aprobación pendiente (expiración).
+    approval_ttl_seconds: int = 300
+    # Roles de auditor autorizados para resolver aprobaciones (Unidad 3).
+    authorized_auditor_roles: list[str] = []
+
+    @model_validator(mode="after")
+    def _validate_h6_constraints(self) -> "Settings":
+        """Reglas normativas H6 (Unidad 1, hold acotado)."""
+        if self.max_held_argument_bytes <= 0:
+            raise ValueError("max_held_argument_bytes debe ser positivo")
+        if self.max_held_argument_bytes > self.max_payload_bytes:
+            raise ValueError("max_held_argument_bytes no puede superar max_payload_bytes")
+        if self.hold_ttl_seconds > self.approval_ttl_seconds:
+            raise ValueError("hold_ttl_seconds no puede superar approval_ttl_seconds")
+        if self.max_held_total_bytes < self.max_held_argument_bytes:
+            raise ValueError("max_held_total_bytes no puede ser menor que max_held_argument_bytes")
+        return self
+
 
 
 @lru_cache
