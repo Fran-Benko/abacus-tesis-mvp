@@ -27,6 +27,14 @@ class ReasonCode(str, Enum):
     DIGEST_MISMATCH = "DIGEST_MISMATCH"
     DECISION_EXPIRED = "DECISION_EXPIRED"
     PROHIBITED_REDIRECT = "PROHIBITED_REDIRECT"
+    # H5 — Policy Engine persistente.
+    TOOL_NOT_REGISTERED = "TOOL_NOT_REGISTERED"
+    NO_POLICY_MATCHED = "NO_POLICY_MATCHED"
+    POLICY_EXPIRED = "POLICY_EXPIRED"
+    SENSITIVITY_EXCEEDED = "SENSITIVITY_EXCEEDED"
+    INSUFFICIENT_AUTHORIZATION = "INSUFFICIENT_AUTHORIZATION"
+    INCOMPATIBLE_OBLIGATIONS = "INCOMPATIBLE_OBLIGATIONS"
+    DB_UNAVAILABLE = "DB_UNAVAILABLE"
 
 
 class GovernanceAction(str, Enum):
@@ -39,6 +47,14 @@ class GovernanceAction(str, Enum):
     PASS = "PASS"
     BLOCK = "BLOCK"
     HITL = "HITL"
+
+
+class RiskLevel(str, Enum):
+    """Nivel de riesgo de una decisión (H5 — round-trip)."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
 
 
 class Obligation(str, Enum):
