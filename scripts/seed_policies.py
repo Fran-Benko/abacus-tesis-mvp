@@ -12,6 +12,7 @@ Requiere que las migraciones ya se hayan aplicado (make start ejecuta el
 migrator) y que DATABASE_URL apunte a la base correcta.
 """
 import json
+import os
 import sys
 
 from argentgob.db.connection import get_connection
@@ -20,6 +21,12 @@ from argentgob.observability.logger import get_logger, setup_logging
 
 setup_logging()
 log = get_logger("seed_policies")
+
+# Ambiente de ejecución. Debe coincidir con el `environment` del envelope en
+# runtime (Settings.environment, default "LOCAL"): el DeterministicEvaluator
+# exige matching exacto de ambiente, por lo que una política con environment
+# NULL nunca coincide y bloquea toda herramienta (NO_POLICY_MATCHED).
+_ENVIRONMENT = os.environ.get("ENVIRONMENT", "LOCAL")
 
 # Clase de operación por herramienta (MVP: todas son de lectura/consulta).
 _OPERATION_CLASS = {
@@ -47,23 +54,25 @@ def seed() -> int:
                     cur.execute(
                         """
                         INSERT INTO governance_policies (
-                            policy_id, profile_name, tool_name,
-                                                operation_class, effect, priority, obligations
+                            policy_id, policy_version, profile_name, tool_name,
+                            operation_class, environment, effect, priority, obligations
                         ) VALUES (
-                            %(policy_id)s, %(profile)s, %(tool)s,
-                                                %(op_class)s, 'ALLOW', 50, %(obligations)s
+                            %(policy_id)s, 1, %(profile)s, %(tool)s,
+                            %(op_class)s, %(environment)s, 'PASS', 50, %(obligations)s
                         )
-                        ON CONFLICT (policy_id) DO UPDATE SET
-                                                    obligations = EXCLUDED.obligations
-                                                """,
+                        ON CONFLICT (policy_id, policy_version) DO UPDATE SET
+                            obligations = EXCLUDED.obligations,
+                            environment = EXCLUDED.environment
+                        """,
                         {
                             "policy_id": policy_id,
                             "profile": profile.name,
                             "tool": tool,
                             "op_class": op_class,
-                                                "obligations": json.dumps(_DEFAULT_OBLIGATIONS),
-                                            },
-                                        )
+                            "environment": _ENVIRONMENT,
+                            "obligations": json.dumps(_DEFAULT_OBLIGATIONS),
+                        },
+                    )
                     insertadas += cur.rowcount
                     log.info(
                         "policy_seeded",
