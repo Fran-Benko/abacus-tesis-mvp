@@ -65,7 +65,7 @@ podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest 
 
 Grep de los resumenes para conocer el baseline histórico:
 baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 =
-**126 passed**.
+126 → H7 +24 unit = **150 passed** (unit).
 
 ### 3.2 Tests de integración
 
@@ -75,7 +75,7 @@ El runner es el mismo pero apuntando a `tests/integration`:
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/integration -q -p no:cacheprovider
 ```
 
-Actualmente: **6 passed**.
+Actualmente: **11 passed** (6 baseline + 5 H7).
 
 ### 3.3 Migraciones (Alembic)
 
@@ -98,7 +98,26 @@ podman run --rm --network argentgob-mvp_default `
   python -m alembic current
 ```
 
-Estado actual: migraciones aplicadas hasta `002 (head)`.
+Estado actual: migraciones aplicadas hasta `003 (head)`.
+
+### 3.3.1 Verificación de la cadena de auditoría (H7)
+
+CLI que verifica la cadena desde el génesis (exit 0 solo si es íntegra):
+
+```powershell
+podman run --rm --network argentgob-mvp_default `
+  -e "DATABASE_URL=postgresql+psycopg://argentgob_app:dev-password-local@postgres:5432/argentgob" `
+  -v "${PWD}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  python -m argentgob.audit.cli
+```
+
+- Exit 0: `OK: la cadena de auditoría es íntegra.`
+- Exit 1: `INVALID: cadena manipulada en sequence=N motivo=<sanitizado>`.
+- Exit 2: error de infraestructura.
+
+La cadena es **tamper-evident**, no inmutable: sin checkpoint externo no se
+garantiza la detección de una reescritura completa o truncado final coherente
+por owner/superusuario (límite declarado del MVP).
 
 ### 3.4 Verificación del stack (health checks)
 
@@ -200,6 +219,10 @@ postgres o con un runner):
 - H6 — Aprobación humana durable y ejecución gobernada: **completo** (paquete
   `src/argentgob/hitl/`, hook HITL durable en el PEP, crew con
   `DeterministicEvaluator`/`PolicyStore` + servcios HITL, 24 tests propios →
-  baseline 126 passed). Merge a `main` pendiente.
-- Próximo hito según plan: **H7 — Auditoría detectable ante manipulación** (ver
+  baseline 126 passed). Merge a `main` en `0bbe158`.
+- H7 — Auditoría detectable ante manipulación: **completo** (paquete
+  `src/argentgob/audit/` con `canonical`/`append`/`verify`/`cli`, migración 003
+  con trigger append-only + grants + columna `payload`, 24 tests unit + 5
+  integración → baseline 161 passed). Merge a `main` pendiente.
+- Próximo hito según plan: **H8 — Consola sanitizada y resolución autorizada** (ver
   resúmenes de sesión para análisis detallado).
