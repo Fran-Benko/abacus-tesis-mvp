@@ -14,6 +14,14 @@ import psycopg
 import streamlit as st
 from psycopg.rows import dict_row
 
+from argentgob.console.hitl_detail import HitlDetailService
+from argentgob.console.resolution import ResolutionService
+from argentgob.console.service import ConsoleQueryService
+from argentgob.core.config import get_settings
+from argentgob.hitl.resolver import ApprovalResolver
+from argentgob.identity.provider import AuditorIdentityProvider
+from argentgob.identity.roles import AppRole
+
 st.set_page_config(
     page_title="ArgentGob-Mesh · Governance Dashboard",
     page_icon="🛡️",
@@ -99,6 +107,128 @@ def fetch_summary() -> dict:
         return cur.fetchone() or {}
 
 
+# ── H8: Consola sanitizada y resolución autorizada ──────────────────
+def _build_h8_services():
+    """Construye los servicios H8 con la configuración actual."""
+    settings = get_settings()
+    identity = AuditorIdentityProvider(
+        environment=settings.environment,
+        development_only=settings.identity_development_only,
+        session_ttl_seconds=settings.identity_session_ttl_seconds,
+        fixture_roles=settings.identity_fixture_roles,
+    )
+    resolver = ApprovalResolver(settings=settings)
+    detail = HitlDetailService()
+    query = ConsoleQueryService()
+    resolution = ResolutionService(
+        identity_provider=identity,
+        resolver=resolver,
+        detail_service=detail,
+    )
+    return query, detail, resolution, identity
+
+
+def _render_h8_console():
+    """Renderiza la consola H8: métricas, filtros, detalle y resolución."""
+    query, detail, resolution, identity = _build_h8_services()
+
+    # Métricas agregadas.
+    metrics = query.metrics()
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total", metrics["total"])
+    c2.metric("✅ PASS", metrics["pass"])
+    c3.metric("⛔ BLOCK", metrics["block"])
+    c4.metric("🕐 HITL", metrics["hitl"])
+    c5.metric("❓ UNKNOWN", metrics["unknown"])
+
+    # Estado de la cadena de auditoría.
+    audit = query.audit_status()
+    if audit["ok"]:
+        st.success("🔗 Cadena de auditoría íntegra")
+    else:
+        st.error(
+            f"🔗 Cadena de auditoría: {audit['reason']} "
+            f"(sequence={audit['sequence']})"
+        )
+
+    st.divider()
+
+    # Filtros parametrizados.
+    st.subheader("Decisiones sanitizadas (filtros parametrizados)")
+    with st.expander("Filtros", expanded=False):
+        f_action = st.selectbox(
+            "Acción", ["", "PASS", "BLOCK", "HITL"], key="h8_f_action"
+        )
+        f_status = st.selectbox(
+            "Estado", ["", "SUCCESS", "FAILED", "UNKNOWN"], key="h8_f_status"
+        )
+        f_limit = st.slider("Límite", 10, 500, 100, key="h8_f_limit")
+
+    rows = query.list_decisions(
+        action=f_action or None,
+        status=f_status or None,
+        limit=f_limit,
+    )
+    if not rows:
+        st.info("Sin decisiones en la vista sanitizada.")
+    else:
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, height=300)
+
+    st.divider()
+
+    # Approvals PENDING y resolución autorizada.
+    st.subheader("HITL · Approvals pendientes")
+    pending = query.pending_approvals()
+    if not pending:
+        st.info("Sin approvals pendientes.")
+    else:
+        pdf = pd.DataFrame(pending)
+        st.dataframe(pdf, use_container_width=True, height=200)
+
+        # Selección de approval para detalle/resolución.
+        approval_ids = [r["approval_id"] for r in pending]
+        selected = st.selectbox(
+            "Approval", approval_ids, key="h8_approval_select"
+        )
+        if selected:
+            try:
+                det = detail.get_detail(approval_id=selected)
+                st.json(det)
+            except Exception as exc:  # noqa: BLE001
+                st.warning(f"No se pudo cargar el detalle: {exc}")
+
+            # Resolución autorizada (modo fixture de desarrollo).
+            st.markdown("**Resolución autorizada**")
+            st.caption(
+                "Requiere identidad con rol auditor + evidencia vigente "
+                "(modo fixture, development_only)."
+            )
+            actor = st.text_input(
+                "Actor (fixture)", value="auditor-1", key="h8_actor"
+            )
+            decision = st.selectbox(
+                "Decisión", ["APPROVED", "REJECTED"], key="h8_decision"
+            )
+            comment = st.text_input(
+                "Comentario (sanitizado, opcional)", key="h8_comment"
+            )
+            if st.button("Resolver", key="h8_resolve_btn"):
+                try:
+                    evidence = identity.authenticate(
+                        identifier=actor, role=AppRole.AUDITOR
+                    )
+                    result = resolution.resolve(
+                        approval_id=selected,
+                        decision=decision,
+                        evidence=evidence,
+                        comment=comment or None,
+                    )
+                    st.json(result)
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"Error resolviendo: {exc}")
+
+
 st.title("🛡️ ArgentGob-Mesh · Governance Dashboard")
 st.caption(
     f"Actualización automática cada {REFRESH_SECS} s · Sin raw payload · INV-05"
@@ -153,6 +283,16 @@ try:
             .fillna(0)
         )
         st.bar_chart(chart_data)
+
+        # ── H8: Consola sanitizada y resolución autorizada ──────────────
+        st.divider()
+        st.header("🛡️ H8 · Consola sanitizada y resolución autorizada")
+        st.caption(
+            "Vista sanitizada (sin raw payload) · Filtros parametrizados · "
+            "Detalle HITL · Resolución con identidad autorizada"
+        )
+
+        _render_h8_console()
 
 except Exception as exc:  # noqa: BLE001 - mostrar error de conexión en la UI
     st.error(f"Error conectando a la base de datos: {exc}")

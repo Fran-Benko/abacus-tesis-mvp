@@ -64,8 +64,8 @@ podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest 
 ```
 
 Grep de los resumenes para conocer el baseline histórico:
-baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 =
-126 → H7 +24 unit = **150 passed** (unit).
+baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 = 126
+→ H7 +24 unit = 150 → H8 +42 = **192 passed** (unit).
 
 ### 3.2 Tests de integración
 
@@ -98,7 +98,9 @@ podman run --rm --network argentgob-mvp_default `
   python -m alembic current
 ```
 
-Estado actual: migraciones aplicadas hasta `003 (head)`.
+Estado actual: migraciones aplicadas hasta `004 (head)` (H8: roles de consola
+`viewer`/`auditor`/`approver`/`admin`, vista `v_approval_console` sanitizada y
+grants).
 
 ### 3.3.1 Verificación de la cadena de auditoría (H7)
 
@@ -164,6 +166,28 @@ postgres o con un runner):
   gobernada (HITL/`ExecutionOrchestrator`) que requiere una aprobación humana.
 - Vista `v_governance_console` — une `policy_decisions` + `execution_results`.
 
+### 3.7 E2E: consola sanitizada y resolución autorizada (H8)
+
+Script que verifica la consola H8 contra la DB real (métricas, lista
+sanitizada, detalle HITL, resolución autorizada, manejo de carrera, bloqueo sin
+evidencia y vista `v_approval_console`):
+
+```powershell
+$src = (Get-Location).Path
+podman run --rm --network argentgob-mvp_default `
+  -e "DATABASE_URL=******postgres:5432/argentgob" `
+  -e "ENVIRONMENT=LOCAL" `
+  -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  python scripts/e2e_h8_console.py
+```
+
+Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
+
+> **Quirk de `dict_row`**: `get_connection()` (psycopg3) devuelve filas tuple por
+> defecto. Los servicios H8 (`ConsoleQueryService`, `HitlDetailService`) usan
+> `conn.cursor(row_factory=dict_row)` para acceder por nombre de columna. Los
+> tests unitarios usan fakes con `cursor(self, row_factory=None)`.
+
 ---
 
 ## 4. Convención de branches / git
@@ -223,6 +247,12 @@ postgres o con un runner):
 - H7 — Auditoría detectable ante manipulación: **completo** (paquete
   `src/argentgob/audit/` con `canonical`/`append`/`verify`/`cli`, migración 003
   con trigger append-only + grants + columna `payload`, 24 tests unit + 5
-  integración → baseline 161 passed). Merge a `main` pendiente.
-- Próximo hito según plan: **H8 — Consola sanitizada y resolución autorizada** (ver
-  resúmenes de sesión para análisis detallado).
+  integración → baseline 161 passed). Merge a `main` en `87daf67`.
+- H8 — Consola sanitizada y resolución autorizada: **completo** (paquetes
+  `src/argentgob/console/` y `src/argentgob/identity/`, migración 004 con roles
+  + vista `v_approval_console`, extensión del dashboard Streamlit con la consola
+  H8, 42 tests nuevos → baseline **203 passed** (192 unit + 11 integración)).
+  E2E `scripts/e2e_h8_console.py`: 23/23 checks OK contra la DB real. Merge a
+  `main` pendiente.
+- Próximo hito según plan: **H9** (ver resúmenes de sesión para análisis
+  detallado).

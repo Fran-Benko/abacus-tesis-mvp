@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Base de datos
     database_url: str = (
-        "postgresql+psycopg://argentgob_app:dev-password-local@localhost:5432/argentgob"
+        "******localhost:5432/argentgob"
     )
 
     # Gobernanza
@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     approval_ttl_seconds: int = 300
     # Roles de auditor autorizados para resolver aprobaciones (Unidad 3).
     authorized_auditor_roles: list[str] = []
+
+    # H8 — Identidad y autorización de la consola (Unidad 2).
+    # Modo fixture de desarrollo: solo válido en entornos de desarrollo.
+    identity_development_only: bool = True
+    # TTL de la sesión/evidencia de autenticación (segundos).
+    identity_session_ttl_seconds: int = 3600
+    # Mapa fixture: identifier -> roles de aplicación (viewer/auditor/...).
+    # Ejemplo: '{"auditor-1": ["viewer", "auditor"]}'
+    identity_fixture_roles: dict[str, list[str]] = {}
 
     @model_validator(mode="after")
     def _validate_h6_constraints(self) -> "Settings":
