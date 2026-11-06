@@ -1,0 +1,41 @@
+{
+  "total_rows": 3000,
+  "unique_record_ids": 1,
+  "duplicate_feature_rows": 152,
+  "unique_feature_profiles": 2848,
+  "null_counts": 0,
+  "nan_counts": 0,
+  "missing_required": 0,
+  "pii_real_detected": [],
+  "label_counts": {
+    "LOW": 1500,
+    "MEDIUM": 900,
+    "HIGH": 600
+  },
+  "scenario_source_counts": {
+    "benigno": 1477,
+    "limite": 720,
+    "maligno": 580,
+    "conflicto": 223
+  },
+  "tool_counts": {
+    "news": 1486,
+    "stock_price": 951,
+    "crypto_price": 563
+  },
+  "profile_counts": {
+    "analyst": 1684,
+    "admin": 838,
+    "analyst_restricted": 478
+  },
+  "split_counts": {
+    "train": 1800,
+    "calibration": 600,
+    "evaluation": 600
+  },
+  "invalid_operation_classes": [],
+  "expected_total": 3000,
+  "size_ok": true,
+  "balance_ok": true,
+  "min_15pct_boundary_conflict": true
+}

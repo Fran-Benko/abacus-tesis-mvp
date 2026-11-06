@@ -139,11 +139,11 @@ variables antes de construir el corpus.
 
 ### 3.1 Contenido
 
-- [ ] Escenarios benignos, malignos, límites y conflictos.
-- [ ] Cobertura de herramientas, perfiles y clases de operación.
-- [ ] Validación de ausencia de PII real.
-- [ ] Controles de unicidad, completitud y dominio.
-- [ ] Congelar la partición de evaluación final.
+- [x] Escenarios benignos, malignos, límites y conflictos.
+- [x] Cobertura de herramientas, perfiles y clases de operación.
+- [x] Validación de ausencia de PII real.
+- [x] Controles de unicidad, completitud y dominio.
+- [x] Congelar la partición de evaluación final.
 
 ### 3.2 Formato
 
@@ -152,7 +152,25 @@ variables antes de construir el corpus.
   partición asignada, fuente del escenario, estado de validación, identificador
   de versión del corpus.
 
+**Entregables (Fase 2):**
+
+- [x] Generador versionado → [`scripts/build_synthetic_corpus.py`](../scripts/build_synthetic_corpus.py)
+      (`--seed 42 --size 3000`; balance 50/30/20 y split 60/20/20 estratificado).
+- [x] Corpus Parquet versionado → [`data/corpus/corpus_v1.parquet`](../data/corpus/corpus_v1.parquet)
+      (3000 escenarios; todo el corpus es **sintético** con placeholders, sin
+      PII real).
+- [x] Manifiesto → [`data/corpus/corpus_manifest.json`](../data/corpus/corpus_manifest.json)
+      (versión, seed, split, hash de la partición evaluation congelada).
+- [x] Reporte de validación → [`data/corpus/validation_report.json`](../data/corpus/validation_report.json)
+      (PII real, unicidad, completitud, dominio, balance).
+- [x] Validador → [`scripts/validate_corpus.py`](../scripts/validate_corpus.py)
+      (valida contra `risk_dataset_schema.json` + controles; exit 0/1).
+- [x] Tests del corpus → [`tests/unit/test_corpus.py`](../tests/unit/test_corpus.py)
+      (8 tests: esquema, controles, PII, balance, split, dominios, congelado,
+      anti-circularidad).
+
 **Criterio de salida:** corpus versionado, validado y reproducible.
+✔ Verificado: `python scripts/validate_corpus.py` → `RESULTADO: OK`.
 
 ---
 
