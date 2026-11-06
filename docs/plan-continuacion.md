@@ -117,11 +117,17 @@ variables antes de construir el corpus.
 
 ### 2.3 Entregables
 
-- [ ] Dataset specification versionada (esquema de features + variable objetivo).
-- [ ] Guía de etiquetado.
-- [ ] Identificación de riesgos de leakage.
-- [ ] Tamaño y balance mínimo del corpus.
-- [ ] Definición de particiones (60/20/20).
+- [x] Dataset specification versionada (esquema de features + variable objetivo)
+      → [`docs/analytics/0001-dataset-specification.md`](analytics/0001-dataset-specification.md).
+- [x] Guía de etiquetado
+      → [`docs/analytics/0002-labeling-guide.md`](analytics/0002-labeling-guide.md).
+- [x] Identificación de riesgos de leakage (ver §3 de la spec: se excluyen
+      `execution_arguments` crudos, embeddings, `execution_status`,
+      `latency_post_ms` y el resultado de la herramienta).
+- [x] Tamaño y balance mínimo del corpus (3 000 escenarios; LOW 50%, MEDIUM 30%,
+      HIGH 20%; ≥15% de casos límite/conflicto).
+- [x] Definición de particiones (60/20/20 estratificado por clase; evaluación
+      final congelada al cierre de Fase 2).
 
 **Criterio de salida:** dataset specification versionada y aprobada.
 

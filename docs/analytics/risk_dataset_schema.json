@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://argentgob-mesh.github.io/schemas/risk_dataset_schema_v1.json",
+  "title": "risk_dataset_schema_v1",
+  "description": "Esquema de features (pre-ejecución) y variable objetivo del corpus de riesgo de tool call. Anti-circular: el target NO usa observed_action ni la salida del motor determinista.",
+  "version": "v1",
+  "type": "object",
+  "required": [
+    "record_id",
+    "feature_schema_version",
+    "split",
+    "context",
+    "payload",
+    "control",
+    "label"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "description": "Identificador único de la fila del corpus."
+    },
+    "feature_schema_version": {
+      "const": "v1",
+      "description": "Versión del esquema de features."
+    },
+    "corpus_version": {
+      "type": "string",
+      "description": "Identificador de versión del corpus (p. ej. corpus_v1)."
+    },
+    "split": {
+      "type": "string",
+      "enum": ["train", "calibration", "evaluation"],
+      "description": "Partición asignada (60/20/20, estratificada por clase)."
+    },
+    "scenario_source": {
+      "type": "string",
+      "enum": ["benigno", "maligno", "limite", "conflicto"],
+      "description": "Fuente del escenario (Fase 2)."
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_name", "operation_class", "agent_role", "profile", "environment", "resource"],
+      "properties": {
+        "tool_name": {
+          "type": "string",
+          "enum": ["news", "stock_price", "crypto_price"],
+          "description": "Herramienta objetivo de la tentativa."
+        },
+        "operation_class": {
+          "type": "string",
+          "enum": ["READ", "EXTERNAL_SEND", "WRITE", "DELETE", "DDL", "CODE_EXEC"]
+        },
+        "agent_role": {
+          "type": "string",
+          "enum": ["analyst", "analyst_restricted", "admin"],
+          "description": "Perfil/rol lógico del agente."
+        },
+        "profile": {
+          "type": "string",
+          "description": "Nombre del perfil activo."
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["LOCAL", "TEST", "PROD"]
+        },
+        "resource": {
+          "type": "string",
+          "description": "Host/recurso normalizado (css_resource)."
+        },
+        "hour_bucket": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23,
+          "description": "Hora UTC de la tentativa (0-23)."
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payload_size_bytes",
+        "arg_count",
+        "json_depth",
+        "sanitized_text_length",
+        "has_url",
+        "has_sql_injection_pattern",
+        "has_shell_pattern",
+        "pii_category_count",
+        "has_pii",
+        "dominant_data_type"
+      ],
+      "properties": {
+        "payload_size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tamaño del payload en bytes (envelope.payload_size_bytes)."
+        },
+        "arg_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cantidad de argumentos (sobre telemetría sanitizada)."
+        },
+        "json_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Profundidad máxima de la estructura JSON."
+        },
+        "sanitized_text_length": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Longitud del texto sanitizado."
+        },
+        "has_url": {
+          "type": "boolean",
+          "description": "Presencia de URL en la telemetría."
+        },
+        "has_sql_injection_pattern": {
+          "type": "boolean",
+          "description": "Match de patrones de inyección SQL (guardrails)."
+        },
+        "has_shell_pattern": {
+          "type": "boolean",
+          "description": "Match de patrones shell."
+        },
+        "pii_category_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "description": "Cantidad de categorías PII detectadas (SECRET, EMAIL, PAYMENT_NUMBER, POSSIBLE_DNI)."
+        },
+        "has_pii": {
+          "type": "boolean",
+          "description": "pii_category_count > 0."
+        },
+        "dominant_data_type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "object", "array", "null"],
+          "description": "Tipo de dato dominante entre valores sanitizados."
+        }
+      }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool_allowed_for_profile",
+        "matched_policy_count",
+        "has_policy_conflict",
+        "max_allowed_sensitivity",
+        "policy_is_active",
+        "guardrail_query_injection",
+        "guardrail_topic_relevance",
+        "guardrail_rate_limit",
+        "rate_limit_consumption",
+        "operation_type_requested"
+      ],
+      "properties": {
+        "tool_allowed_for_profile": {
+          "type": "boolean",
+          "description": "Herramienta permitida para el perfil."
+        },
+        "matched_policy_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cantidad de políticas coincidentes."
+        },
+        "has_policy_conflict": {
+          "type": "boolean",
+          "description": "Conflicto de políticas detectado."
+        },
+        "max_allowed_sensitivity": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sensibilidad máxima permitida por las políticas."
+        },
+        "policy_is_active": {
+          "type": "boolean",
+          "description": "Vigencia de la política."
+        },
+        "guardrail_query_injection": {
+          "type": "boolean",
+          "description": "Resultado del detector query_injection."
+        },
+        "guardrail_topic_relevance": {
+          "type": "boolean",
+          "description": "Resultado del detector topic_relevance."
+        },
+        "guardrail_rate_limit": {
+          "type": "boolean",
+          "description": "Resultado del detector rate_limit."
+        },
+        "rate_limit_consumption": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Consumo actual del rate limit."
+        },
+        "operation_type_requested": {
+          "type": "string",
+          "description": "Tipo de operación solicitada (syscall/método)."
+        }
+      }
+    },
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["risk_class", "confidence", "rationale", "source", "double_labeled", "reviewed"],
+      "properties": {
+        "risk_class": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH"],
+          "description": "Variable objetivo, asignada por rúbrica humana (anti-circular)."
+        },
+        "confidence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Confianza del etiquetador (1-5)."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Id de la fila de la guía de etiquetado aplicada."
+        },
+        "source": {
+          "const": "rubrica_humana",
+          "description": "Fuente de la etiqueta (fija)."
+        },
+        "double_labeled": {
+          "type": "boolean",
+          "description": "Participó en la muestra de acuerdo inter-etiquetador."
+        },
+        "reviewed": {
+          "type": "boolean",
+          "description": "Pasó adjudicación/revisión."
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
