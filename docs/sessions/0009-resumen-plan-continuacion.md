@@ -74,31 +74,48 @@ no resuelven por sí solas.
 ## Estado del repositorio
 
 - Rama de trabajo: `main` (worktree raíz).
-- Archivos nuevos (untracked):
-  - `docs/plan-continuacion.md` — hoja de ruta de continuación.
-  - `AGENTS.md` — instrucciones de sesión persistentes.
-  - `docs/modulo2-entrega.md` — entrega Módulo 2 (ya existía, sigue untracked).
+- Commit de cierre: `b4acdc4` — "docs: reconciliar entrega modulo 2 y registrar
+  plan de continuacion (Fase 0)".
+- Archivos versionados: `docs/modulo2-entrega.md`, `docs/plan-continuacion.md`,
+  `AGENTS.md` y `docs/sessions/0009-resumen-plan-continuacion.md`.
 - No se modificó código de producción ni se agregaron tests.
+
+## Fase 0 — Completada (reconciliación técnica y documental)
+
+1. **`docs/modulo2-entrega.md` actualizado:** 203 tests (192 unit + 11
+   integración), migraciones 001-004, H8 consola sanitizada y resolución
+   autorizada (backlog, tarjeta 3Cs, migración 004, dashboard, arquitectura,
+   flujo), PH backlog 82 → 81, sprints 84 → 94 (sin duplicar H7), 6 políticas
+   YAML (admin 1, analyst 3, analyst_restricted 2), imagen
+   `argentgob-mvp-agent:latest` y reproducción con E2E H8.
+2. **Reproducibilidad verificada (contra stack Podman real):**
+   - Suite completa: **203 passed** (34.9 s).
+   - E2E H8: **23/23 checks OK**.
+   - Cadena de auditoría: **OK** (íntegra).
+   - Migraciones: **004 (head)**.
+3. **Commit** `b4acdc4` con los 4 documentos.
 
 ## Próximo hito
 
-**Fase 0 — Reconciliación técnica y documental** del
-[`plan-continuacion.md`](../plan-continuacion.md):
-
-1. Actualizar `docs/modulo2-entrega.md` a 203 tests / migración 004 / H8, y
-   corregir PH (81/94), duplicación de H7 y conteo de políticas (6).
-2. Commitear `modulo2-entrega.md`, `plan-continuacion.md` y `AGENTS.md`.
-3. Verificar reproducibilidad (203 passed, E2E H8 23/23, cadena OK, migración
-   004 head).
-
-Luego seguir con **Fase 1 (definición analítica)** → **Fase 2 (corpus)** →
-**Fase 3 (modelado)** → **Fase 4 (integración)** → **Fase 5 (interfaz y
-evidencia)**.
+**Fase 1 — Definición analítica** del
+[`plan-continuacion.md`](../plan-continuacion.md): definir la variable objetivo
+(riesgo de tool call pre-ejecución), las features predictoras disponibles en el
+`ToolCallEnvelope`, la etiqueta (LOW/MEDIUM/HIGH), el split
+entrenamiento/calibración/evaluación y las familias de modelos (regresión
+logística + Random Forest) antes de construir el corpus sintético (Fase 2).
 
 ## Verificación de cierre de sesión
 
-Esta sesión fue de planificación/documentación (sin cambios de código), por lo
-que no aplica el flujo completo de rebuild + tests. La suite sigue en **203
-passed** y las migraciones en **004 (head)**. El flujo de verificación completo
-aplica a partir de la Fase 0 cuando se modifique código o documentación
-versionada.
+La sesión incluyó la **Fase 0** (reconciliación documental + cambios en
+documentación versionada). Se ejecutó el flujo de verificación completo contra
+el stack Podman real:
+
+- Suite completa: **203 passed** (192 unit + 11 integración).
+- E2E H8: **23/23 checks OK**.
+- Cadena de auditoría: **OK** (íntegra).
+- Migraciones: **004 (head)**.
+- Commit de cierre: `b4acdc4` (4 documentos, 988 inserciones).
+
+La suite sigue en **203 passed** y las migraciones en **004 (head)**. El flujo
+de verificación completo aplica a partir de la Fase 1 cuando se agregue
+código de la capa predictiva.
