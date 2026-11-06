@@ -192,11 +192,17 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 ## 4. Convención de branches / git
 
+- **Al iniciar cada sesión de desarrollo**, crear una rama de trabajo nueva para
+  ese hito (prefijo `agents/`); si ya existe, `git switch` a ella. El trabajo de
+  la sesión se hace siempre en esa rama.
 - El worktree que mantiene el **checkout de `main`** es `plan-implementacion-avancemos`.
   No se puede `git checkout main` desde otro worktree. El merge a `main` se hace:
   ```powershell
   git -C "<plan-implementacion-avancemos>" merge --ff-only <branch>
   ```
+- Al cierre de la sesión (cambios validados con tests + E2E): (1) push de la
+  rama de trabajo (`git push -u origin <branch>`) y (2) merge `--ff-only` a
+  `main` desde el worktree raíz.
 - Branches de trabajo por hito, prefijo `agents/`, p. ej.
   `agents/h5-policy-engine-persistente-implementacion`.
 - Regla de release: **no se pushea ni mergea hasta que pasen la suite unitaria y

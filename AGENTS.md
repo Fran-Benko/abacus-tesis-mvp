@@ -203,14 +203,23 @@ Verificar cabecera con `python -m alembic current` (estado actual: `004 (head)`)
 
 ### 5.1 Branches
 
-- Rama de trabajo por hito, prefijo `agents/`, p. ej.
-  `agents/h12-corpus-predictivo`.
+- **Al iniciar cada sesión de desarrollo**, crear una rama de trabajo nueva para
+  ese hito, con prefijo `agents/`, p. ej. `agents/h12-corpus-predictivo`. Si la
+  rama del hito ya existe, usar `git switch` a ella; si no, crearla desde
+  `main` (o desde la cabecera verificada).
+- El trabajo de la sesión se hace **siempre** en esa rama de trabajo; nunca
+  commitear directo sobre `main`.
 - El worktree que mantiene el checkout de `main` es la **raíz del repo**
   (`plan-implementacion-avancemos`). No se puede `git checkout main` desde otro
-  worktree. El merge a `main` se hace:
+  worktree. El merge a `main` se hace SOLO al cierre de la sesión, después de
+  validar (sección 4):
   ```powershell
   git -C "<worktree-raiz>" merge --ff-only <branch>
   ```
+- **Al finalizar la sesión**, una vez validados todos los cambios (tests + E2E),
+  ejecutar en orden: (1) `git push -u origin <branch>` para publicar la rama de
+  trabajo y (2) el merge `--ff-only` a `main` desde el worktree raíz. Solo
+  después de esos dos pasos se considera cerrado el hito.
 
 ### 5.2 Commits
 
