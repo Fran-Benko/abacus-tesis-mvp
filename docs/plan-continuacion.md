@@ -1,0 +1,282 @@
+# Plan de continuación — ArgentGob-Mesh MVP
+
+> **Proyecto de tesis.** Documentación en español.
+> Este plan consolida las definiciones y validaciones realizadas en sesiones
+> previas para continuar el desarrollo del prototipo. Es la **hoja de ruta**
+> para incorporar la capa predictiva (H12–H16) sobre la base de ingeniería ya
+> implementada (H1–H11).
+
+---
+
+## 0. Contexto y decisiones tomadas
+
+### 0.1 Estado actual verificado (baseline)
+
+- **Suite de pruebas:** **203 passed** (192 unit + 11 integración).
+- **Migraciones aplicadas:** 001 → 002 → 003 → **004** (head).
+- **Hitos completos:** H1–H8 (intercepción, sanitización, ABAC, guardrails,
+  policy engine persistente, HITL, auditoría encadenada, consola sanitizada).
+- **Dashboard:** Streamlit con KPIs, decisiones, eventos, distribución por
+  herramienta y sección H8 (consola sanitizada + resolución autorizada).
+- **E2E H8:** `scripts/e2e_h8_console.py` → 23/23 checks OK.
+- **Rama de trabajo:** `main` (worktree `plan-implementacion-avancemos`).
+
+### 0.2 Validaciones realizadas (sesiones previas)
+
+1. **"Reconocimiento probabilístico" de PII — NO existe.** La sanitización en
+   `src/argentgob/module_b/sanitizer.py` es 100% determinista (4 regex fijos:
+   SECRET, EMAIL, PAYMENT_NUMBER, POSSIBLE_DNI). No hay dependencias de
+   ML/NER. La frase de la tesis E3 no corresponde al código.
+2. **`modulo2-entrega.md` fue reconciliado en Fase 0:** ahora describe el
+   estado real (203 tests, migraciones 001-004, H1-H8 completo, 81 PH de
+   backlog, 94 PH de sprints, 6 políticas en YAML) y está versionado en git.
+3. **El diseño predictivo se integra limpiamente** con el repositorio actual:
+   el `pre_hook` y el `ToolCallEnvelope` son el punto de inyección natural; la
+   persistencia (`policy_decisions.risk_level`), el dashboard y el HITL ya
+   existen y son reutilizables.
+
+### 0.3 Decisiones de alcance (pragmáticas)
+
+| Decisión | Opción elegida | Justificación |
+|---|---|---|
+| **Alcance predictivo** | Regresión logística + Random Forest (comparación mínima defendible) | El análisis previo lo recomendó; balance entre interpretabilidad y poder predictivo |
+| **Detector PII probabilístico** | Evolución posterior (backlog) | Mantener el foco en la capa predictiva; los regex siguen siendo la barrera dura |
+| **Corpus** | Sintético generado por script (controlado y versionado) | Coherente con la definición de la tesis (corpus sintético, controlado, versionado) |
+| **Reconciliación** | Actualizar y commitear `modulo2-entrega.md` primero | Evitar montar la capa predictiva sobre una base documental desactualizada |
+| **Formato del plan** | Documento Markdown en `docs/` | Este archivo |
+
+---
+
+## 1. Fase 0 — Reconciliación técnica y documental
+
+**Objetivo:** dejar el repositorio y la documentación en un estado reproducible
+y coherente antes de incorporar la capa predictiva.
+
+### 1.1 Actualizar `modulo2-entrega.md`
+
+Corregir las inconsistencias detectadas:
+
+- [x] Suite de pruebas: **161 → 203** (192 unit + 11 integración).
+- [x] Migraciones: **001-003 → 001-004** (agregar `004_h8_console_roles.py`).
+- [x] Agregar **H8** (consola sanitizada y resolución autorizada) al backlog,
+      historias y estado.
+- [x] Corregir el total de PH del backlog: **82 → 81** (3+5+5+8+13+13+13+3+5+5+8).
+- [x] Corregir la suma de sprints: **84 → 94** (21+31+26+16).
+- [x] Resolver la duplicación de **H7** en Sprint 2 y Sprint 3.
+- [x] Aclarar el conteo de políticas: el "8" era de la corrida documentada; los
+      YAML actuales suman **6** (admin 1, analyst 3, analyst_restricted 2).
+- [x] Corregir la mención a "reconocimiento probabilístico" de PII (no existe;
+      es regex determinista).
+- [x] Commitear el documento (hoy está untracked).
+
+### 1.2 Verificación de reproducibilidad
+
+- [x] Ejecutar la suite completa: **203 passed**.
+- [x] Ejecutar E2E H8: **23/23 checks OK**.
+- [x] Verificar cadena de auditoría: `python -m argentgob.audit.cli` → `OK`.
+- [x] Confirmar migraciones en `004 (head)`.
+
+**Criterio de salida:** el repositorio reconstruye el mismo estado que los
+contenedores actuales y la documentación refleja ese estado.
+
+---
+
+## 2. Fase 1 — Definición analítica
+
+**Objetivo:** definir formalmente el problema de Ciencia de Datos y sus
+variables antes de construir el corpus.
+
+### 2.1 Problema de Ciencia de Datos
+
+- **Tipo:** clasificación supervisada multiclase.
+- **Unidad de observación:** tentativa de tool call **antes** de su ejecución.
+- **Variable objetivo:** `LOW` / `MEDIUM` / `HIGH`.
+- **Anti-circularidad:** la etiqueta NO debe ser copia de `observed_action` ni
+  de la salida del motor determinista. Se construye a partir de escenarios
+  etiquetados y criterios de riesgo definidos previamente.
+
+### 2.2 Variables predictoras (solo pre-ejecución)
+
+**Contexto:**
+- `tool_name`, `operation_class`, `agent_role`, `profile`, `environment`,
+  `resource`, `hour_bucket`.
+
+**Payload y estructura:**
+- `payload_size_bytes`, cantidad de argumentos, profundidad de la estructura
+  JSON, longitud del texto sanitizado, presencia de URL, presencia de patrones
+  SQL/shell, presencia y cantidad de categorías PII, tipo de dato dominante.
+
+**Política y control:**
+- Herramienta permitida para el perfil, cantidad de políticas coincidentes,
+  existencia de conflicto, sensibilidad máxima permitida, vigencia de la
+  política, resultado de detectores individuales, consumo de rate limit, tipo
+  de operación solicitada.
+
+**Excluidos (fuga de información):** embeddings, texto crudo, `execution_status`,
+`latency_post_ms`, resultado de la herramienta.
+
+### 2.3 Entregables
+
+- [ ] Dataset specification versionada (esquema de features + variable objetivo).
+- [ ] Guía de etiquetado.
+- [ ] Identificación de riesgos de leakage.
+- [ ] Tamaño y balance mínimo del corpus.
+- [ ] Definición de particiones (60/20/20).
+
+**Criterio de salida:** dataset specification versionada y aprobada.
+
+---
+
+## 3. Fase 2 — Construcción del corpus
+
+**Objetivo:** generar un corpus sintético, controlado y versionado.
+
+### 3.1 Contenido
+
+- [ ] Escenarios benignos, malignos, límites y conflictos.
+- [ ] Cobertura de herramientas, perfiles y clases de operación.
+- [ ] Validación de ausencia de PII real.
+- [ ] Controles de unicidad, completitud y dominio.
+- [ ] Congelar la partición de evaluación final.
+
+### 3.2 Formato
+
+- Tabla PostgreSQL o archivo Parquet versionado (o ambos).
+- Campos: etiqueta objetivo, variables del modelo, versión del esquema,
+  partición asignada, fuente del escenario, estado de validación, identificador
+  de versión del corpus.
+
+**Criterio de salida:** corpus versionado, validado y reproducible.
+
+---
+
+## 4. Fase 3 — Modelado
+
+**Objetivo:** entrenar, calibrar y evaluar los modelos candidatos.
+
+### 4.1 Modelos
+
+- [ ] Baseline mayoritario.
+- [ ] Regresión logística multinomial (interpretable, coeficientes auditables).
+- [ ] Random Forest (captura interacciones no lineales, importancia de variables).
+
+### 4.2 Evaluación
+
+- [ ] Validación cruzada estratificada dentro del entrenamiento.
+- [ ] Calibración de probabilidades.
+- [ ] Selección de umbrales.
+- [ ] Métricas: Macro F1, Recall por clase, matriz de confusión, Balanced
+      Accuracy, Log Loss, Brier Score, curva de calibración, latencia P50/P95/P99.
+- [ ] Criterio principal: **Recall de HIGH** (un falso negativo de alto riesgo
+      es más grave que una revisión humana adicional).
+- [ ] Análisis de errores.
+
+**Criterio de salida:** modelo elegido con métricas reproducibles.
+
+---
+
+## 5. Fase 4 — Integración operacional
+
+**Objetivo:** incorporar la inferencia predictiva al flujo de gobernanza.
+
+### 5.1 Componentes
+
+- [ ] `RiskPredictor` (carga de artefacto + esquema de features).
+- [ ] `FeatureBuilder` (extrae features pre-ejecución del `ToolCallEnvelope`).
+- [ ] Inferencia en el `pre_hook` (antes de la decisión determinista).
+- [ ] Persistencia de predicción y versión.
+- [ ] Integración de precedencias PASS/BLOCK/HITL.
+- [ ] Fallback seguro (modelo no disponible → motor determinista fail-closed).
+
+### 5.2 Precedencia de decisión
+
+1. Guardrail crítico o política BLOCK → **BLOCK**.
+2. Predicción HIGH por encima del umbral → **BLOCK**.
+3. Predicción MEDIUM o baja confianza → **HITL**.
+4. Predicción LOW y políticas compatibles → **PASS**.
+5. Error de inferencia → fallback determinista documentado.
+
+### 5.3 Persistencia (migración 005)
+
+- `risk_model_versions`: model_id, model_version, algorithm,
+  feature_schema_version, training_dataset_version, trained_at, metrics_json,
+  calibration_method, decision_thresholds, artifact_digest, status.
+- `risk_predictions`: prediction_id, event_id, decision_id, model_id,
+  model_version, predicted_risk_class, risk_probability, class_probabilities,
+  inference_latency_ms, feature_schema_version, predicted_at.
+
+### 5.4 Tests
+
+- [ ] Unitarios (FeatureBuilder, RiskPredictor, precedencias, fallback).
+- [ ] Integración (inferencia en el pre_hook + persistencia).
+- [ ] Latencia (P50/P95/P99).
+
+**Criterio de salida:** predicción ejecutada antes de la tool call y utilizada
+por gobernanza.
+
+---
+
+## 6. Fase 5 — Interfaz y evidencia académica
+
+**Objetivo:** hacer visible la predicción y documentar los resultados.
+
+### 6.1 Dashboard
+
+- [ ] Riesgo estimado, clase predicha, probabilidad/confianza, versión del modelo.
+- [ ] Decisión sugerida por el modelo vs decisión final de gobierno.
+- [ ] Motivo de divergencia entre predicción y decisión.
+- [ ] Distribución temporal de riesgos.
+- [ ] Matriz de confusión (conjunto de evaluación).
+- [ ] Curva de calibración.
+- [ ] Tasa de HITL originada por predicción.
+
+### 6.2 Documentación
+
+- [ ] Actualizar arquitectura (Feature Builder, Risk Model, Model Registry,
+      Inference Service).
+- [ ] Actualizar modelo de datos (relaciones y cardinalidades).
+- [ ] Completar historias de usuario y criterios de aceptación H1-H4 y H8-H11.
+- [ ] Descomponer sprints en tareas operativas.
+- [ ] Relacionar corpus analítico y modelo persistente.
+- [ ] Documentar resultados separando: tests de software, métricas analíticas
+      de detectores, métricas predictivas del modelo.
+
+**Criterio de salida:** trazabilidad completa entre corpus, modelo, predicción,
+decisión y visualización.
+
+---
+
+## 7. Prioridad recomendada
+
+**Prioridad crítica:**
+1. Reconciliar repositorio e imágenes (Fase 0).
+2. Definir etiqueta y features (Fase 1).
+3. Construir corpus (Fase 2).
+4. Entrenar y evaluar modelo (Fase 3).
+5. Integrar inferencia antes de la ejecución (Fase 4).
+6. Persistir y visualizar las predicciones (Fase 5).
+
+**Prioridad alta:**
+- Completar criterios de aceptación de H1-H4 y H8-H11.
+- Verificar HITL end-to-end.
+- Detallar relaciones y cardinalidades.
+- Crear Sprint Backlogs con tareas, esfuerzo y dependencias.
+
+**Prioridad media:**
+- Refinar políticas declarativas.
+- Mejorar visualizaciones históricas.
+- Detector PII probabilístico (evolución posterior).
+- Monitoreo de deriva (evolución posterior).
+
+---
+
+## 8. Convenciones de trabajo
+
+- **Branches:** prefijo `agents/`, p. ej. `agents/h12-corpus-predictivo`.
+- **Release:** no pushear/mergear hasta que pasen la suite unitaria y el E2E.
+- **Commits:** prefijo convencional (`feat:`, `fix:`, `docs:`, `test:`) +
+  trailer `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
+- **Verificación:** usar la imagen `localhost/argentgob-mvp-agent:latest` con
+  `-p no:cacheprovider`; E2E con `--network argentgob-mvp_default`.
+- **Stack:** levantar siempre desde el worktree `plan-implementacion-avancemos`
+  (el modelo GGUF solo existe ahí).
