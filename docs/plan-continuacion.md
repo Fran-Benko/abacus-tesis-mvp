@@ -229,18 +229,18 @@ corpus sigue `RESULTADO: OK`.
 
 ---
 
-## 5. Fase 4 — Integración operacional
+## 5. Fase 4 — Integración operacional ✅ COMPLETADA
 
 **Objetivo:** incorporar la inferencia predictiva al flujo de gobernanza.
 
 ### 5.1 Componentes
 
-- [ ] `RiskPredictor` (carga de artefacto + esquema de features).
-- [ ] `FeatureBuilder` (extrae features pre-ejecución del `ToolCallEnvelope`).
-- [ ] Inferencia en el `pre_hook` (antes de la decisión determinista).
-- [ ] Persistencia de predicción y versión.
-- [ ] Integración de precedencias PASS/BLOCK/HITL.
-- [ ] Fallback seguro (modelo no disponible → motor determinista fail-closed).
+- [x] `RiskPredictor` (carga de artefacto + esquema de features).
+- [x] `FeatureBuilder` (extrae features pre-ejecución del `ToolCallEnvelope`).
+- [x] Inferencia en el `pre_hook` (antes de la decisión determinista).
+- [x] Persistencia de predicción y versión.
+- [x] Integración de precedencias PASS/BLOCK/HITL.
+- [x] Fallback seguro (modelo no disponible → motor determinista fail-closed).
 
 ### 5.2 Precedencia de decisión
 
@@ -250,23 +250,44 @@ corpus sigue `RESULTADO: OK`.
 4. Predicción LOW y políticas compatibles → **PASS**.
 5. Error de inferencia → fallback determinista documentado.
 
+> Implementado en `GovernanceMiddleware.pre_hook`: la inferencia se ejecuta
+> después de la sanitización (telemetría) y **antes** de la evaluación
+> determinista; la precedencia BLOCK determinista gana siempre; HIGH eleva a
+> BLOCK (`PREDICTED_HIGH_RISK`), MEDIUM sobre PASS eleva a HITL
+> (`PREDICTED_MEDIUM_RISK`, protocolo H6 durable si hay aprobación);
+> LOW mantiene la decisión determinista; error de inferencia o modelo ausente
+> → fallback fail-closed.
+
 ### 5.3 Persistencia (migración 005)
 
-- `risk_model_versions`: model_id, model_version, algorithm,
+- [x] `risk_model_versions`: model_id, model_version, algorithm,
   feature_schema_version, training_dataset_version, trained_at, metrics_json,
   calibration_method, decision_thresholds, artifact_digest, status.
-- `risk_predictions`: prediction_id, event_id, decision_id, model_id,
+- [x] `risk_predictions`: prediction_id, event_id, decision_id, model_id,
   model_version, predicted_risk_class, risk_probability, class_probabilities,
   inference_latency_ms, feature_schema_version, predicted_at.
 
+> Grants mínimos: `argentgob_app` escribe ambas tablas; los roles de consola
+> (viewer/auditor/operator) solo leen `risk_predictions` (visualización Fase 5).
+
 ### 5.4 Tests
 
-- [ ] Unitarios (FeatureBuilder, RiskPredictor, precedencias, fallback).
-- [ ] Integración (inferencia en el pre_hook + persistencia).
-- [ ] Latencia (P50/P95/P99).
+- [x] Unitarios (FeatureBuilder, RiskPredictor, precedencias, fallback).
+- [x] Integración (inferencia en el pre_hook + persistencia).
+- [x] Latencia (P50/P95/P99).
 
-**Criterio de salida:** predicción ejecutada antes de la tool call y utilizada
-por gobernanza.
+> `tests/unit/test_analytics_integration.py` (11 tests): vector canónico de
+> features (27), detección de inyección sobre telemetría, degradación sin
+> policy_source, carga y predicción del pipeline real con umbral HIGH,
+> no-disponible sin artefactos, precedencia HIGH→BLOCK, MEDIUM→HITL,
+> fallback sin predictor, fallback ante error de inferencia, persistencia
+> fail-open. E2E `scripts/e2e_fase4_predictive.py` (6/6) contra PostgreSQL:
+> LOW→PASS, HIGH→BLOCK (`PREDICTED_HIGH_RISK`), persistencia en
+> `risk_predictions`, fallback.
+
+**Criterio de salida:** ✅ predicción ejecutada antes de la tool call y
+utilizada por gobernanza. Suite completa: **232 passed** (221 previos + 11
+nuevos).
 
 ---
 

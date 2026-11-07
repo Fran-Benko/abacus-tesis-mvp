@@ -22,6 +22,11 @@ from argentgob.tools.news_tool import NewsTool
 from argentgob.tools.stock_tool import StockPriceTool
 from argentgob.observability.logger import get_logger
 
+# Fase 4 — Integración operacional: capa predictiva.
+from argentgob.analytics.features import FeatureBuilder
+from argentgob.analytics.predictor import RiskPredictor
+from argentgob.analytics.store import PredictionStore
+
 
 log = get_logger(__name__)
 
@@ -41,7 +46,8 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
     agent_id = AgentIdentity(id=f"agent-{profile_name}", role=profile_name)
 
     # Configurar el middleware de gobernanza (H5: evaluador determinista con
-    # políticas persistentes; H6: servicios de aprobación humana durable).
+    # políticas persistentes; H6: servicios de aprobación humana durable;
+    # Fase 4: capa predictiva opcional).
     policy_store = PolicyStore(settings=settings)
     evaluator = DeterministicEvaluator(settings=settings, policy_source=policy_store)
     guardrails = GuardrailEngine(
@@ -52,6 +58,11 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
     hold = InMemoryArgumentHold(settings=settings)
     approval_service = ApprovalService(settings=settings)
     notifier = ApprovalNotifier(channel=ConsoleNotifier())
+    # Fase 4 — capa predictiva: si el modelo entrenado existe, se integra al
+    # PEP; si no, el PEP degrada a fallback determinista fail-closed.
+    feature_builder = FeatureBuilder(policy_source=policy_store)
+    risk_predictor = RiskPredictor()
+    prediction_store = PredictionStore(settings=settings)
     middleware = GovernanceMiddleware(
         settings=settings,
         abac=evaluator,
@@ -60,6 +71,9 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
         hold=hold,
         approval_service=approval_service,
         notifier=notifier,
+        feature_builder=feature_builder,
+        risk_predictor=risk_predictor,
+        prediction_store=prediction_store,
     )
 
     # Instanciar herramientas gobernadas según el perfil.

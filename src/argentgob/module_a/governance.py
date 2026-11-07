@@ -31,6 +31,11 @@ from argentgob.module_c.guardrails import GuardrailEngine
 from argentgob.hitl.errors import HitlError
 from argentgob.observability.logger import get_logger
 
+# Fase 4 — Integración operacional: capa predictiva.
+from argentgob.analytics.features import FeatureBuilder
+from argentgob.analytics.predictor import RiskPredictor
+from argentgob.analytics.store import PredictionStore
+
 log = get_logger(__name__)
 
 
@@ -55,21 +60,31 @@ class GovernanceMiddleware:
         hold=None,
         approval_service=None,
         notifier=None,
-    ):
-        self.settings = settings
-        self.sanitizer = Sanitizer(settings)
-        self.abac = abac
-        self.guardrails = guardrails
-        self.audit = audit
-        # Servicios H6 (aprobación humana durable). Opcionales: si no están
-        # inyectados, el flujo HITL degrada al comportamiento R2 (bloquear sin
-        # perseguir la aprobación humana). Inyectarlos habilita el protocolo
-        # completo (hold + approval durable + notificación).
-        self.hold = hold
-        self.approval_service = approval_service
-        self.notifier = notifier
-        # Registro temporal de decisiones por evento (para enlazar post_hook).
-        self._decision_index: dict[str, str] = {}
+            # Fase 4 — Integración operacional: capa predictiva opcional.
+            # Si no se inyectan, el PEP degrada a fallback determinista fail-closed
+            # (sin predicción, la decisión la toma el motor determinista).
+            feature_builder: FeatureBuilder | None = None,
+            risk_predictor: RiskPredictor | None = None,
+            prediction_store: PredictionStore | None = None,
+        ):
+            self.settings = settings
+            self.sanitizer = Sanitizer(settings)
+            self.abac = abac
+            self.guardrails = guardrails
+            self.audit = audit
+            # Servicios H6 (aprobación humana durable). Opcionales: si no están
+            # inyectados, el flujo HITL degrada al comportamiento R2 (bloquear sin
+            # perseguir la aprobación humana). Inyectarlos habilita el protocolo
+            # completo (hold + approval durable + notificación).
+            self.hold = hold
+            self.approval_service = approval_service
+            self.notifier = notifier
+            # Fase 4 — capa predictiva.
+            self.feature_builder = feature_builder
+            self.risk_predictor = risk_predictor
+            self.prediction_store = prediction_store
+            # Registro temporal de decisiones por evento (para enlazar post_hook).
+            self._decision_index: dict[str, str] = {}
 
     def pre_hook(
         self,
@@ -134,6 +149,13 @@ class GovernanceMiddleware:
         # 5. Sanitizar para telemetr?a (M?dulo B).
         envelope.telemetry_arguments = self.sanitizer.sanitize(execution_arguments)
 
+        # Fase 4 — Integración operacional: inferencia predictiva.
+        #    Se ejecuta ANTES de la decisión determinista; si el modelo está
+        #    disponible, puede elevar un PASS del motor a BLOCK (HIGH) o HITL
+        #    (MEDIUM). Si no está disponible o falla, la decisión queda en el
+        #    motor determinista (fallback fail-closed).
+        self._run_predictive_inference(envelope, started)
+
         # 6. Evaluar pol?tica ABAC (M?dulo C).
         decision = self.abac.evaluate(envelope)
         envelope.decision = decision
@@ -148,6 +170,31 @@ class GovernanceMiddleware:
                 "module_a.pep",
                 started,
             )
+
+        # Persistir la predicción con el decision_id final (upsert idempotente).
+        #    La predicción se registró antes de la decisión determinista; aquí
+        #    se vincula al decision_id una vez que la decisión existe.
+        if envelope.prediction is not None and self.prediction_store is not None:
+            self.prediction_store.record_prediction(
+                envelope, envelope.prediction, decision_id=decision.decision_id
+            )
+
+        # Fase 4 — Integración operacional: precedencia de decisión.
+        #    1) BLOCK determinista (política/guardrail) gana siempre.
+        #    2) Predicción HIGH → BLOCK.
+        #    3) Predicción MEDIUM → HITL.
+        #    4) Predicción LOW → PASS (mantiene la decisión determinista).
+        prediction = envelope.prediction
+        if prediction is not None and decision.action != GovernanceAction.BLOCK:
+            if prediction.predicted_risk_class == "HIGH":
+                decision.action = GovernanceAction.BLOCK
+                decision.reason_code = ReasonCode.PREDICTED_HIGH_RISK
+            elif (
+                prediction.predicted_risk_class == "MEDIUM"
+                and decision.action == GovernanceAction.PASS
+            ):
+                decision.action = GovernanceAction.HITL
+                decision.reason_code = ReasonCode.PREDICTED_MEDIUM_RISK
 
         if decision.action == GovernanceAction.BLOCK:
             latency_pre_ms = (time.perf_counter() - started) * 1000
@@ -170,61 +217,7 @@ class GovernanceMiddleware:
         #    En R2 la aprobaci?n humana no est? implementada (es H6), por lo
         #    que HITL NO ejecuta la herramienta (cero requests no autorizados).
         if decision.action == GovernanceAction.HITL:
-            latency_pre_ms = (time.perf_counter() - started) * 1000
-            log.warning(
-                "policy_hitl",
-                evento="? HITL REQUIRED",
-                tool=tool_name,
-                reason=decision.reason_code.value,
-                decision_id=decision.decision_id,
-            )
-            now = datetime.now(timezone.utc)
-            expires_at = now + timedelta(
-                seconds=self.settings.approval_ttl_seconds
-            )
-            idempotency_key = f"hitl:{envelope.event_id}"
-            argument_digest = _argument_digest(envelope.execution_arguments)
-
-            if self.approval_service is not None and self.hold is not None:
-                try:
-                    approval, token_id, token_plan = (
-                        self.approval_service.create_pending_and_issue_token(
-                            event_id=envelope.event_id,
-                            decision_id=decision.decision_id,
-                            agent_id=envelope.agent.id,
-                            tool_name=envelope.tool_name,
-                            argument_digest=argument_digest,
-                            idempotency_key=idempotency_key,
-                            argued_at=now,
-                            expires_at=expires_at,
-                            hold_registered=lambda: self._register_hold(
-                                envelope, expires_at
-                            ),
-                        )
-                    )
-                    if token_id is not None and self.notifier is not None:
-                        self.notifier.notify_approval_pending(
-                            envelope=envelope,
-                            approval_id=approval.approval_id,
-                            idempotency_key=idempotency_key,
-                            expires_at=expires_at,
-                            destination=None,
-                            sanitized_preview=envelope.telemetry_arguments,
-                        )
-                except HitlError as exc:
-                    log.warning(
-                        "policy_hitl_service_error",
-                        evento="? HITL REQUIRED (error de servicio)",
-                        tool=tool_name,
-                        error=str(exc),
-                    )
-            self.audit.record_decision(
-                envelope, decision, latency_pre_ms=latency_pre_ms
-            )
-            raise HookAborted(
-                reason=f"blocked:{ReasonCode.HUMAN_APPROVAL_REQUIRED.value}",
-                source="argentgob.pep",
-            )
+            self._elevate_hitl(envelope, decision, started)
 
         # R2 ? Frontera gobernada: selecci?n de argumentos.
         #    Exige exactamente una obligaci?n (USE_ORIGINAL o USE_TRANSFORMED).
@@ -287,6 +280,114 @@ class GovernanceMiddleware:
         self._decision_index[envelope.event_id] = decision.decision_id
 
         return envelope
+
+    def _run_predictive_inference(
+        self, envelope: ToolCallEnvelope, started: float
+    ) -> None:
+        """Inferencia predictiva pre-ejecución (Fase 4).
+
+        Construye las features del envelope, predice el riesgo y persiste la
+        predicción. NO lanza excepciones: cualquier error degrada a fallback
+        (decide el motor determinista).
+        """
+        if self.risk_predictor is None or not self.risk_predictor.available:
+            return
+        try:
+            builder = self.feature_builder or FeatureBuilder(
+                policy_source=getattr(self.abac, "policy_source", None),
+                rate_limit_consumption=self.guardrails._call_count,
+            )
+            features = builder.build(envelope)
+            prediction = self.risk_predictor.predict(features)
+            if prediction is None:
+                return
+            envelope.prediction = prediction
+            if self.prediction_store is not None:
+                self.prediction_store.record_prediction(
+                    envelope, prediction, decision_id=None
+                )
+            log.info(
+                "predictive_inference",
+                evento="🔮 PREDICCIÓN",
+                tool=envelope.tool_name,
+                predicted=prediction.predicted_risk_class,
+                prob_high=round(prediction.risk_probability, 4),
+                latency_ms=prediction.inference_latency_ms,
+            )
+        except Exception as exc:  # noqa: BLE001 - fallback fail-closed
+            log.warning(
+                "predictive_inference_failed",
+                detail=str(exc),
+                event_id=envelope.event_id,
+            )
+            envelope.prediction = None
+
+    def _elevate_hitl(
+        self,
+        envelope: ToolCallEnvelope,
+        decision: Any,
+        started: float,
+    ) -> None:
+        """Eleva la decisión actual a HITL (protocolo H6 completo, si existe).
+
+        Fase 4 — La predicción MEDIUM eleva un PASS del motor a HITL, reutilizando
+        el protocolo de aprobación humana durable (hold + approval + notifier).
+        """
+        latency_pre_ms = (time.perf_counter() - started) * 1000
+        log.warning(
+            "policy_hitl_predictive",
+            evento="? HITL REQUIRED (predicción MEDIUM)",
+            tool=envelope.tool_name,
+            reason=decision.reason_code.value,
+            decision_id=decision.decision_id,
+        )
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(
+            seconds=self.settings.approval_ttl_seconds
+        )
+        idempotency_key = f"hitl:{envelope.event_id}"
+        argument_digest = _argument_digest(envelope.execution_arguments)
+
+        if self.approval_service is not None and self.hold is not None:
+            try:
+                approval, token_id, token_plan = (
+                    self.approval_service.create_pending_and_issue_token(
+                        event_id=envelope.event_id,
+                        decision_id=decision.decision_id,
+                        agent_id=envelope.agent.id,
+                        tool_name=envelope.tool_name,
+                        argument_digest=argument_digest,
+                        idempotency_key=idempotency_key,
+                        argued_at=now,
+                        expires_at=expires_at,
+                        hold_registered=lambda: self._register_hold(
+                            envelope, expires_at
+                        ),
+                    )
+                )
+                if token_id is not None and self.notifier is not None:
+                    self.notifier.notify_approval_pending(
+                        envelope=envelope,
+                        approval_id=approval.approval_id,
+                        idempotency_key=idempotency_key,
+                        expires_at=expires_at,
+                        destination=None,
+                        sanitized_preview=envelope.telemetry_arguments,
+                    )
+            except HitlError as exc:
+                log.warning(
+                    "policy_hitl_service_error",
+                    evento="? HITL REQUIRED (error de servicio)",
+                    tool=envelope.tool_name,
+                    error=str(exc),
+                )
+        self.audit.record_decision(
+            envelope, decision, latency_pre_ms=latency_pre_ms
+        )
+        raise HookAborted(
+            reason=f"blocked:{ReasonCode.HUMAN_APPROVAL_REQUIRED.value}",
+            source="argentgob.pep",
+        )
 
     def post_hook(
         self,

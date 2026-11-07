@@ -43,6 +43,10 @@ class ToolCallEnvelope:
     effective_arguments: dict[str, Any] = field(default_factory=dict)
     # Decisión de política asociada a este envelope (se fija en el PEP).
     decision: Any = None
+    # Fase 4 — Integración operacional: predicción de riesgo pre-ejecución
+    # (RiskPrediction). Se fija en el PEP antes de la decisión determinista;
+    # `None` significa fallback (modelo no disponible o error de inferencia).
+    prediction: Any = None
 
     def verify_digest(self) -> bool:
         """Verifica que el digest del envelope coincida con los argumentos.

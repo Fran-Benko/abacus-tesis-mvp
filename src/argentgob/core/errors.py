@@ -48,6 +48,11 @@ class ReasonCode(str, Enum):
     NOTIFICATION_FAILED = "NOTIFICATION_FAILED"
     RESULT_ALREADY_EXISTS = "RESULT_ALREADY_EXISTS"
     UNAUTHORIZED_AUDITOR = "UNAUTHORIZED_AUDITOR"
+    # Fase 4 — Integración operacional: capa predictiva.
+    # La predicción del modelo de riesgo eleva una decisión PASS del motor
+    # determinista a BLOCK (HIGH) o HITL (MEDIUM).
+    PREDICTED_HIGH_RISK = "PREDICTED_HIGH_RISK"
+    PREDICTED_MEDIUM_RISK = "PREDICTED_MEDIUM_RISK"
 
 
 class GovernanceAction(str, Enum):
