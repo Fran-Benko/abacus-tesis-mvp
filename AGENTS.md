@@ -29,21 +29,26 @@ hito sin leer su gate.**
 ## 2. Estado actual del prototipo (baseline)
 
 - **Hitos completos:** H1–H8 (intercepción, sanitización, ABAC, guardrails,
-  policy engine persistente, HITL, auditoría encadenada, consola sanitizada).
-- **Suite de pruebas:** **203 passed** (unit + integración).
-- **Migraciones aplicadas:** 001 → 002 → 003 → **004** (head).
+  policy engine persistente, HITL, auditoría encadenada, consola sanitizada)
+  y Fases 1–5 de la capa predictiva (definición analítica, corpus sintético,
+  modelado, integración operacional, interfaz y evidencia académica).
+- **Suite de pruebas:** **253 passed** (unit + integración).
+- **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
 - **Dashboard:** Streamlit con KPIs, decisiones, eventos, distribución por
-  herramienta y sección H8 (consola sanitizada + resolución autorizada).
+  herramienta, sección H8 (consola sanitizada + resolución autorizada) y
+  sección Fase 5 (evidencia predictiva).
 - **E2E H8:** `scripts/e2e_h8_console.py` → 23/23 checks OK.
+- **E2E Fase 4:** `scripts/e2e_fase4_predictive.py` → 6/6 checks OK.
+- **E2E Fase 5:** `scripts/e2e_fase5_evidence.py` → 19/19 checks OK.
 - **Rama de trabajo:** `main` (worktree raíz, posee el modelo GGUF).
 
 ### Próximo hito
 
-Según [`docs/plan-continuacion.md`](docs/plan-continuacion.md), el siguiente
-trabajo es la **Fase 0 — Reconciliación técnica y documental** (actualizar
-`docs/modulo2-entrega.md` a 203 tests / migración 004 / H8, y commitearlo),
-antes de incorporar la capa predictiva (H12–H16). Consultar el plan para el
-detalle de cada fase y sus criterios de salida.
+La hoja de ruta de [`docs/plan-continuacion.md`](docs/plan-continuacion.md)
+(Fases 0–5) está **completa**. El trabajo pendiente es de prioridad alta y no
+bloqueante: completar criterios de aceptación de H1–H4 y H8–H11, verificar
+HITL end-to-end con el modelo activo, detallar relaciones y cardinalidades en
+la entrega del Módulo 2, y descomponer los sprints en tareas operativas.
 
 ---
 
@@ -136,7 +141,7 @@ $src = (Get-Location).Path
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/ -q -p no:cacheprovider
 ```
 
-> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **203 passed**.
+> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **253 passed**.
 
 ### 4.3 Tests de integración
 
@@ -172,6 +177,22 @@ paso no aplica.
     python scripts/e2e_h8_console.py
   ```
   Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
+- **Capa predictiva (Fase 4):**
+  ```powershell
+  podman run --rm --network argentgob-mvp_default `
+    -e "DATABASE_URL=******postgres:5432/argentgob" `
+    -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+    python scripts/e2e_fase4_predictive.py
+  ```
+  Resultado esperado: `===== E2E FASE 4: 6 passed, 0 failed =====`.
+- **Evidencia académica (Fase 5):**
+  ```powershell
+  podman run --rm --network argentgob-mvp_default `
+    -e "DATABASE_URL=******postgres:5432/argentgob" `
+    -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+    python scripts/e2e_fase5_evidence.py
+  ```
+  Resultado esperado: `===== E2E FASE 5: 19 passed, 0 failed =====`.
 - **Stack (health checks):** `./scripts/verify_stack.sh` (llama-server,
   dashboard, postgres).
 - **Agente E2E (análisis de empresa):**
@@ -195,7 +216,7 @@ podman run --rm --network argentgob-mvp_default `
   python -m alembic upgrade head
 ```
 
-Verificar cabecera con `python -m alembic current` (estado actual: `004 (head)`).
+Verificar cabecera con `python -m alembic current` (estado actual: `006 (head)`).
 
 ---
 

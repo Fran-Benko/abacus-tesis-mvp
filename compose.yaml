@@ -108,6 +108,10 @@ services:
       DATABASE_URL: "postgresql+psycopg://argentgob_app:${POSTGRES_PASSWORD}@postgres:5432/argentgob"
     ports:
       - "8501:8501"
+    # Fase 5: artefactos del modelo y corpus para la evidencia académica
+    # (matriz de confusión y curva de calibración sobre la partición congelada).
+    volumes:
+      - ./data:/app/data:ro
     depends_on:
       postgres:
         condition: service_healthy

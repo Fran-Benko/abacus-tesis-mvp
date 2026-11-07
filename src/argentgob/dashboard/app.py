@@ -14,6 +14,7 @@ import psycopg
 import streamlit as st
 from psycopg.rows import dict_row
 
+from argentgob.dashboard.evidence import render_evidence_section
 from argentgob.console.hitl_detail import HitlDetailService
 from argentgob.console.resolution import ResolutionService
 from argentgob.console.service import ConsoleQueryService
@@ -293,6 +294,10 @@ try:
         )
 
         _render_h8_console()
+
+    # ── Fase 5: evidencia predictiva (corpus → modelo → decisión) ────
+    st.divider()
+    render_evidence_section()
 
 except Exception as exc:  # noqa: BLE001 - mostrar error de conexión en la UI
     st.error(f"Error conectando a la base de datos: {exc}")

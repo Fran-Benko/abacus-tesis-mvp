@@ -53,7 +53,10 @@ class PredictionStore:
                             %(class_probabilities)s, %(inference_latency_ms)s,
                             %(feature_schema_version)s, now()
                         )
-                        ON CONFLICT (prediction_id) DO NOTHING
+                        ON CONFLICT (prediction_id) DO UPDATE
+                            SET decision_id = COALESCE(
+                                EXCLUDED.decision_id, risk_predictions.decision_id
+                            )
                         """,
                         {
                             "prediction_id": f"pred-{envelope.event_id}",

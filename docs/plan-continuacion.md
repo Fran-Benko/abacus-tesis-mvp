@@ -12,13 +12,19 @@
 
 ### 0.1 Estado actual verificado (baseline)
 
-- **Suite de pruebas:** **203 passed** (192 unit + 11 integración).
-- **Migraciones aplicadas:** 001 → 002 → 003 → **004** (head).
+- **Suite de pruebas:** **253 passed** (232 unit + 21 integración).
+- **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
 - **Hitos completos:** H1–H8 (intercepción, sanitización, ABAC, guardrails,
-  policy engine persistente, HITL, auditoría encadenada, consola sanitizada).
+  policy engine persistente, HITL, auditoría encadenada, consola sanitizada)
+  y Fases 1–5 de la capa predictiva (definición analítica, corpus, modelado,
+  integración operacional, interfaz y evidencia académica).
 - **Dashboard:** Streamlit con KPIs, decisiones, eventos, distribución por
-  herramienta y sección H8 (consola sanitizada + resolución autorizada).
+  herramienta, sección H8 (consola sanitizada + resolución autorizada) y
+  sección Fase 5 (evidencia predictiva: predicción vs decisión, divergencias,
+  distribución temporal, matriz de confusión y curva de calibración).
 - **E2E H8:** `scripts/e2e_h8_console.py` → 23/23 checks OK.
+- **E2E Fase 4:** `scripts/e2e_fase4_predictive.py` → 6/6 checks OK.
+- **E2E Fase 5:** `scripts/e2e_fase5_evidence.py` → 19/19 checks OK.
 - **Rama de trabajo:** `main` (worktree `plan-implementacion-avancemos`).
 
 ### 0.2 Validaciones realizadas (sesiones previas)
@@ -291,57 +297,81 @@ nuevos).
 
 ---
 
-## 6. Fase 5 — Interfaz y evidencia académica
+## 6. Fase 5 — Interfaz y evidencia académica ✅ COMPLETADA
 
 **Objetivo:** hacer visible la predicción y documentar los resultados.
 
 ### 6.1 Dashboard
 
-- [ ] Riesgo estimado, clase predicha, probabilidad/confianza, versión del modelo.
-- [ ] Decisión sugerida por el modelo vs decisión final de gobierno.
-- [ ] Motivo de divergencia entre predicción y decisión.
-- [ ] Distribución temporal de riesgos.
-- [ ] Matriz de confusión (conjunto de evaluación).
-- [ ] Curva de calibración.
-- [ ] Tasa de HITL originada por predicción.
+- [x] Riesgo estimado, clase predicha, probabilidad/confianza, versión del modelo.
+- [x] Decisión sugerida por el modelo vs decisión final de gobierno.
+- [x] Motivo de divergencia entre predicción y decisión.
+- [x] Distribución temporal de riesgos.
+- [x] Matriz de confusión (conjunto de evaluación).
+- [x] Curva de calibración.
+- [x] Tasa de HITL originada por predicción.
+
+> Implementado en `src/argentgob/dashboard/evidence.py` (sección
+> «🔮 Fase 5 · Evidencia predictiva» del dashboard) sobre dos servicios:
+> `PredictionQueryService` (consultas parametrizadas sobre la vista
+> `v_risk_evidence`) y `ModelEvidenceService` (recálculo reproducible de
+> matriz de confusión, métricas por clase y curva de calibración sobre la
+> partición de evaluación congelada). El dashboard monta `./data` en solo
+> lectura para acceder a los artefactos del modelo y al corpus.
 
 ### 6.2 Documentación
 
-- [ ] Actualizar arquitectura (Feature Builder, Risk Model, Model Registry,
+- [x] Actualizar arquitectura (Feature Builder, Risk Model, Model Registry,
       Inference Service).
-- [ ] Actualizar modelo de datos (relaciones y cardinalidades).
-- [ ] Completar historias de usuario y criterios de aceptación H1-H4 y H8-H11.
-- [ ] Descomponer sprints en tareas operativas.
-- [ ] Relacionar corpus analítico y modelo persistente.
-- [ ] Documentar resultados separando: tests de software, métricas analíticas
+- [x] Actualizar modelo de datos (relaciones y cardinalidades).
+- [x] Completar historias de usuario y criterios de aceptación H1-H4 y H8-H11.
+- [x] Descomponer sprints en tareas operativas.
+- [x] Relacionar corpus analítico y modelo persistente.
+- [x] Documentar resultados separando: tests de software, métricas analíticas
       de detectores, métricas predictivas del modelo.
 
-**Criterio de salida:** trazabilidad completa entre corpus, modelo, predicción,
-decisión y visualización.
+> Ver `docs/analytics/0003-arquitectura-y-evidencia.md` (arquitectura de la
+> capa predictiva, modelo de datos con cardinalidades, trazabilidad
+> corpus → modelo → predicción → decisión y separación de resultados) y
+> `docs/sessions/0014-resumen-fase5-evidencia.md`.
+
+### 6.3 Persistencia (migración 006)
+
+- [x] Vista `v_risk_evidence`: cruza `risk_predictions` con
+      `governance_decisions` por `event_id` (predicción ↔ decisión final).
+- [x] Grants de solo lectura para los roles de consola
+      (viewer/auditor/operator) sobre la vista, `risk_predictions` y
+      `risk_model_versions`.
+- [x] `PredictionStore` vincula el `decision_id` en el upsert
+      (`ON CONFLICT ... DO UPDATE`), corrigiendo el no-op previo.
+
+**Criterio de salida:** ✅ trazabilidad completa entre corpus, modelo,
+predicción, decisión y visualización. Suite completa: **253 passed**
+(232 previos + 21 nuevos). E2E Fase 5: **19/19**. Migración `006 (head)`.
 
 ---
 
 ## 7. Prioridad recomendada
 
-**Prioridad crítica:**
-1. Reconciliar repositorio e imágenes (Fase 0).
-2. Definir etiqueta y features (Fase 1).
-3. Construir corpus (Fase 2).
-4. Entrenar y evaluar modelo (Fase 3).
-5. Integrar inferencia antes de la ejecución (Fase 4).
-6. Persistir y visualizar las predicciones (Fase 5).
+**Prioridad crítica (completada):**
+1. ✅ Reconciliar repositorio e imágenes (Fase 0).
+2. ✅ Definir etiqueta y features (Fase 1).
+3. ✅ Construir corpus (Fase 2).
+4. ✅ Entrenar y evaluar modelo (Fase 3).
+5. ✅ Integrar inferencia antes de la ejecución (Fase 4).
+6. ✅ Persistir y visualizar las predicciones (Fase 5).
 
-**Prioridad alta:**
+**Prioridad alta (pendiente):**
 - Completar criterios de aceptación de H1-H4 y H8-H11.
-- Verificar HITL end-to-end.
+- Verificar HITL end-to-end con el modelo activo.
 - Detallar relaciones y cardinalidades.
 - Crear Sprint Backlogs con tareas, esfuerzo y dependencias.
 
-**Prioridad media:**
+**Prioridad media (evolución posterior):**
 - Refinar políticas declarativas.
 - Mejorar visualizaciones históricas.
-- Detector PII probabilístico (evolución posterior).
-- Monitoreo de deriva (evolución posterior).
+- Detector PII probabilístico.
+- Monitoreo de deriva del modelo.
 
 ---
 

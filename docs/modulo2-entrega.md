@@ -11,13 +11,15 @@ El contenido de este documento refleja el estado **real y verificado** del proto
 
 | Verificación | Resultado |
 |---|---|
-| Suite de pruebas completa (`pytest tests/`) | ✅ **203 passed** (192 unit + 11 integración) |
+| Suite de pruebas completa (`pytest tests/`) | ✅ **253 passed** (232 unit + 21 integración) |
 | Dashboard Streamlit (`:8501`) | ✅ HTTP 200 |
 | LLM local llama-server (`:8080`) | ✅ HTTP 200 |
 | PostgreSQL (`argentgob-mvp-postgres-1`) | ✅ Healthy |
 | Cadena de auditoría (`audit_chain`) | ✅ **Íntegra** (verificador CLI: `OK`) |
 | E2E consola H8 (`scripts/e2e_h8_console.py`) | ✅ **23/23 checks OK** |
-| Migraciones aplicadas | ✅ 001 → 002 → 003 → 004 |
+| E2E capa predictiva (`scripts/e2e_fase4_predictive.py`) | ✅ **6/6 checks OK** |
+| E2E evidencia académica (`scripts/e2e_fase5_evidence.py`) | ✅ **19/19 checks OK** |
+| Migraciones aplicadas | ✅ 001 → 002 → 003 → 004 → 005 → 006 |
 
 **Datos reales en la base (al momento de la verificación):**
 
@@ -25,8 +27,10 @@ El contenido de este documento refleja el estado **real y verificado** del proto
 - `audit_chain`: 1 entrada encadenada (génesis).
 - `governance_policies`: 6 políticas `PASS` (admin: 1, analyst: 3, analyst_restricted: 2).
 - `approval_requests`: sin registros (flujo HITL sin activar en esta corrida).
+- `risk_model_versions`: 1 versión activa (`risk_model_v1` / `v1`, logistic, isotonic).
+- `risk_predictions`: predicciones con clase, probabilidad, latencia y vínculo a la decisión final.
 
-> **Nota de trazabilidad:** el worktree de la rama `feat/r0-reconciliation-baseline` contiene solo la migración `001` y el alcance R0 (Módulos A/B/C + auditoría básica). Las funcionalidades **H5 (policy engine persistente), H6 (aprobación humana HITL), H7 (auditoría encadenada) y H8 (consola sanitizada y resolución autorizada)** están implementadas y verificadas en las imágenes de contenedor actualizadas (`argentgob-mvp-agent`), con migraciones `002`, `003` y `004` aplicadas en la base. Este documento cubre el alcance completo del prototipo tal como corre en los contenedores.
+> **Nota de trazabilidad:** el worktree de la rama `feat/r0-reconciliation-baseline` contiene solo la migración `001` y el alcance R0 (Módulos A/B/C + auditoría básica). Las funcionalidades **H5 (policy engine persistente), H6 (aprobación humana HITL), H7 (auditoría encadenada) y H8 (consola sanitizada y resolución autorizada)** están implementadas y verificadas en las imágenes de contenedor actualizadas (`argentgob-mvp-agent`), con migraciones `002`, `003` y `004` aplicadas en la base. La **capa predictiva (Fases 1–5)** agrega las migraciones `005` (predicciones y registro de modelos) y `006` (vista de evidencia). Este documento cubre el alcance completo del prototipo tal como corre en los contenedores.
 
 ---
 
@@ -227,6 +231,23 @@ El esquema se construye mediante 4 migraciones Alembic aplicadas en orden.
 
 > **H8 — resolución autorizada:** `ResolutionService` exige identidad (rol) y evidencia de autenticación; sin evidencia, la resolución se bloquea (estado `blocked`).
 
+#### Migración 005 — Capa predictiva (Fase 4)
+
+**Tabla `risk_model_versions`** — registro de versiones del modelo:
+- PK compuesta `(model_id, model_version)`, `algorithm`, `feature_schema_version`, `training_dataset_version`, `trained_at`, `metrics_json`, `calibration_method`, `decision_thresholds`, `artifact_digest`, `status`.
+
+**Tabla `risk_predictions`** — predicciones por tool call:
+- `prediction_id` (PK, `pred-<event_id>`), `event_id`, `decision_id`, `model_id`, `model_version`, `predicted_risk_class` (LOW/MEDIUM/HIGH), `risk_probability`, `class_probabilities` (JSON), `inference_latency_ms`, `feature_schema_version`, `predicted_at`.
+- Índices: `ix_risk_predictions_event_id`, `ix_risk_predictions_predicted_at`.
+
+#### Migración 006 — Vista de evidencia (Fase 5)
+
+**Vista `v_risk_evidence`** — cruza `risk_predictions` con `governance_decisions` por `event_id` (17 columnas sanitizadas: identificadores, versión del modelo, clase y probabilidades, latencia de inferencia, decisión final y contexto de la tool call). **No expone** `execution_arguments` ni payload crudo (INV-05).
+
+**Grants:** los roles de consola (`argentgob_console_viewer`, `_auditor`, `_operator`) solo leen la vista, `risk_predictions` y `risk_model_versions`.
+
+> **Trazabilidad:** `corpus_v1` → `risk_model_v1` (`artifact_digest`) → `risk_predictions` → `governance_decisions` → `v_risk_evidence` → dashboard. Ver [0003-arquitectura-y-evidencia.md](analytics/0003-arquitectura-y-evidencia.md).
+
 ### 3.6 Prototipo de Interfaces de Pantalla (Wireframes)
 
 **Dashboard de monitoreo (Streamlit, `:8501`):**
@@ -236,6 +257,7 @@ El esquema se construye mediante 4 migraciones Alembic aplicadas en orden.
 - **Tabla "Eventos de ejecución":** `event_id`, `decision_id`, `tool_name`, `status`, `error_message`, `recorded_at`.
 - **Gráfico "Distribución por herramienta":** bar chart de `tool_name` × `action`.
 - **Sección H8 "Consola sanitizada y resolución autorizada":** métricas agregadas, estado de la cadena de auditoría, lista de decisiones sanitizadas con filtros parametrizados (acción/estado/límite), detalle HITL (estado, tool, `risk_level`, `argument_digest`, edad/expiración) y resolución autorizada con roles (`viewer`/`auditor`/`approver`/`admin`) + evidencia de autenticación (modo fixture en desarrollo). Nunca expone `execution_arguments` ni raw payload (INV-05).
+- **Sección Fase 5 "Evidencia predictiva":** KPIs de predicciones (distribución LOW/MEDIUM/HIGH, HITL y BLOCK originados por predicción, tasa HITL predictiva, latencia media de inferencia), tabla "Predicción vs decisión final" con motivo de divergencia, agregado de divergencias, distribución temporal de riesgos, versiones del modelo registradas y evaluación del modelo (matriz de confusión, métricas por clase y curva de calibración sobre la partición de evaluación congelada).
 
 **Rol en el proceso de negocio:** permite al operador de seguridad observar en tiempo real qué decisiones toma el PEP, detectar bloqueos recurrentes (inyección, rate limit), correlacionar decisiones con resultados de ejecución y resolver solicitudes HITL con identidad y evidencia, sin exponer datos sensibles.
 
@@ -277,9 +299,9 @@ flowchart LR
 
     **Flujo de comunicación:**
     1. El agente CrewAI invoca una herramienta → `GovernedTool._run`.
-    2. `pre_hook` construye el envelope, sanitiza (Módulo B) y evalúa ABAC + guardrails + policy engine (Módulo C).
-    3. Si `BLOCK` → se lanza `HookAborted` y la herramienta **no se ejecuta** (INV-01/INV-02).
-    4. Si `HITL` → se crea una solicitud de aprobación durable y se emite un token de reanudación (H6).
+    2. `pre_hook` construye el envelope, sanitiza (Módulo B), ejecuta la inferencia predictiva (Feature Builder + Risk Model) y evalúa ABAC + guardrails + policy engine (Módulo C).
+    3. Si `BLOCK` (determinista o por predicción HIGH) → se lanza `HookAborted` y la herramienta **no se ejecuta** (INV-01/INV-02).
+    4. Si `HITL` (determinista o por predicción MEDIUM) → se crea una solicitud de aprobación durable y se emite un token de reanudación (H6).
     5. Si `PASS` → se ejecuta la herramienta y `post_hook` registra el resultado.
     6. Decisiones, eventos y entradas de la cadena de auditoría se persisten en PostgreSQL; el dashboard y la consola H8 los consumen para monitoreo en tiempo real y el verificador CLI valida la integridad de la cadena.
     7. La consola H8 permite resolver solicitudes HITL con identidad y evidencia de autenticación (nunca expone el payload crudo, INV-05).
@@ -315,6 +337,16 @@ podman run --rm --network argentgob-mvp_default \
   podman run --rm --network argentgob-mvp_default \
     -v "${PWD}:/app:Z" -w /app \
     localhost/argentgob-mvp-agent:latest python scripts/e2e_h8_console.py
+
+  # Verificar la capa predictiva contra la DB real (6/6 checks)
+  podman run --rm --network argentgob-mvp_default \
+    -v "${PWD}:/app:Z" -w /app \
+    localhost/argentgob-mvp-agent:latest python scripts/e2e_fase4_predictive.py
+
+  # Verificar la evidencia académica contra la DB real (19/19 checks)
+  podman run --rm --network argentgob-mvp_default \
+    -v "${PWD}:/app:Z" -w /app \
+    localhost/argentgob-mvp-agent:latest python scripts/e2e_fase5_evidence.py
 
   # Dashboard
   make dashboard   # http://localhost:8501
