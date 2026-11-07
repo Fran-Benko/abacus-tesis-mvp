@@ -30,9 +30,10 @@ hito sin leer su gate.**
 
 - **Hitos completos:** H1–H8 (intercepción, sanitización, ABAC, guardrails,
   policy engine persistente, HITL, auditoría encadenada, consola sanitizada)
-  y Fases 1–5 de la capa predictiva (definición analítica, corpus sintético,
-  modelado, integración operacional, interfaz y evidencia académica).
-- **Suite de pruebas:** **253 passed** (unit + integración).
+  y Fases 1–6 de la capa predictiva (definición analítica, corpus sintético,
+  modelado, integración operacional, interfaz y evidencia académica, tests de
+  integración de flujos agénticos).
+- **Suite de pruebas:** **259 passed** (unit + integración).
 - **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
 - **Dashboard:** Streamlit con KPIs, decisiones, eventos, distribución por
   herramienta, sección H8 (consola sanitizada + resolución autorizada) y
@@ -45,7 +46,7 @@ hito sin leer su gate.**
 ### Próximo hito
 
 La hoja de ruta de [`docs/plan-continuacion.md`](docs/plan-continuacion.md)
-(Fases 0–5) está **completa**. El trabajo pendiente es de prioridad alta y no
+(Fases 0–6) está **completa**. El trabajo pendiente es de prioridad alta y no
 bloqueante: completar criterios de aceptación de H1–H4 y H8–H11, verificar
 HITL end-to-end con el modelo activo, detallar relaciones y cardinalidades en
 la entrega del Módulo 2, y descomponer los sprints en tareas operativas.
@@ -141,7 +142,7 @@ $src = (Get-Location).Path
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/ -q -p no:cacheprovider
 ```
 
-> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **253 passed**.
+> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **259 passed**.
 
 ### 4.3 Tests de integración
 

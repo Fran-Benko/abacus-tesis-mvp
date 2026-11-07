@@ -12,7 +12,7 @@
 
 ### 0.1 Estado actual verificado (baseline)
 
-- **Suite de pruebas:** **253 passed** (232 unit + 21 integración).
+- **Suite de pruebas:** **259 passed** (unit + integración).
 - **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
 - **Hitos completos:** H1–H8 (intercepción, sanitización, ABAC, guardrails,
   policy engine persistente, HITL, auditoría encadenada, consola sanitizada)
@@ -351,6 +351,51 @@ predicción, decisión y visualización. Suite completa: **253 passed**
 
 ---
 
+## 6.5 Fase 6 — Tests de integración de flujos agénticos ✅ COMPLETADA
+
+**Objetivo:** reproducir en los tests de integración los flujos reales que
+ejecutan los usuarios finales: análisis agénticos con agentes de IA que
+recorren varias tool calls. Validar que la solución **valide, analice, prediga
+y/o bloquee** lo que corresponde en cada paso y que el resultado quede
+**reflejado en los servicios de consulta del dashboard** y en la **auditoría
+persistente**.
+
+### 6.5.1 Componentes
+
+- [x] `tests/integration/test_agentic_flows.py`: 6 tests que reproducen un
+      agente `analyst` recorriendo un análisis de mercado con varias tool
+      calls (benignas → PASS, inyección SQL → BLOCK por predicción HIGH, PII →
+      BLOCK por predicción HIGH, herramienta no permitida → BLOCK por
+      política).
+- [x] Componentes reales: `RiskPredictor` (modelo versionado), `FeatureBuilder`,
+      `ABACEvaluator`, `GuardrailEngine`, `AuditWriter` y `PredictionStore`.
+- [x] Persistencia en memoria que implementa las tablas/vistas de gobernanza
+      (`governance_decisions`, `governance_events`, `risk_predictions`,
+      `v_governance_console`, `v_risk_evidence`).
+- [x] Verificación del reflejo en dashboard: `ConsoleQueryService` (PASS/BLOCK/
+      HITL) y `PredictionQueryService` (predicciones, divergencias, HITL/BLOCK
+      por predicción).
+- [x] INV-05: la auditoría y las predicciones persisten digests, nunca el
+      payload crudo.
+
+### 6.5.2 Tests
+
+- [x] `test_agente_analisis_mercado_valida_predice_bloquea`: flujo completo
+      PASS benigno + BLOCK por riesgo.
+- [x] `test_decisiones_reflejadas_en_consola`: el dashboard refleja PASS/BLOCK.
+- [x] `test_predicciones_reflejadas_en_evidencia`: el dashboard refleja las
+      predicciones y los bloqueos por predicción.
+- [x] `test_auditoria_registra_decisiones_sin_payload_crudo`: INV-05.
+- [x] `test_herramienta_no_permitida_bloquea_por_politica`: BLOCK por política.
+- [x] `test_prediccion_medium_eleva_a_hitl_reflejado`: MEDIUM → HITL reflejado.
+
+**Criterio de salida:** ✅ los tests de integración reproducen flujos agénticos
+reales y verifican que la solución valida, analiza, predice y bloquea lo
+correcto, reflejado en dashboard y auditoría. Suite completa: **259 passed**
+(253 previos + 6 nuevos).
+
+---
+
 ## 7. Prioridad recomendada
 
 **Prioridad crítica (completada):**
@@ -360,6 +405,7 @@ predicción, decisión y visualización. Suite completa: **253 passed**
 4. ✅ Entrenar y evaluar modelo (Fase 3).
 5. ✅ Integrar inferencia antes de la ejecución (Fase 4).
 6. ✅ Persistir y visualizar las predicciones (Fase 5).
+7. ✅ Tests de integración de flujos agénticos (Fase 6).
 
 **Prioridad alta (pendiente):**
 - Completar criterios de aceptación de H1-H4 y H8-H11.
