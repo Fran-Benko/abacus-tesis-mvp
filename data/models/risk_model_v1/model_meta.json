@@ -1,0 +1,57 @@
+{
+  "model_id": "risk_model_v1",
+  "model_version": "v1",
+  "algorithm": "logistic",
+  "feature_schema_version": "v1",
+  "training_dataset_version": "corpus_v1",
+  "training_split": "train (60%)",
+  "calibration_split": "calibration (20%)",
+  "evaluation_split": "evaluation (20%) congelada",
+  "calibration_method": "isotonic",
+  "cv": "5-fold estratificada (train)",
+  "trained_at": "2026-11-07T00:45:59.615958+00:00",
+  "seed": 42,
+  "metrics_evaluation": {
+    "macro_f1": 0.9985,
+    "recall_by_class": {
+      "LOW": 0.9967,
+      "MEDIUM": 1.0,
+      "HIGH": 1.0
+    },
+    "precision_by_class": {
+      "LOW": 1.0,
+      "MEDIUM": 0.9945,
+      "HIGH": 1.0
+    },
+    "balanced_accuracy": 0.9989,
+    "log_loss": 0.0341,
+    "brier_high": 0.0096,
+    "confusion_matrix": [
+      [
+        299,
+        1,
+        0
+      ],
+      [
+        0,
+        180,
+        0
+      ],
+      [
+        0,
+        0,
+        120
+      ]
+    ],
+    "high_false_negatives": 0,
+    "threshold_high": 0.3,
+    "latency_ms": {
+      "p50": 11.62,
+      "p95": 12.08,
+      "p99": 12.09
+    },
+    "recall_high_calibration": 1.0,
+    "precision_high_calibration": 0.9523809523809523
+  },
+  "artifact_digest": "sha256:6443f70889f766fffb045613e8c178bcd29a52e90c47e11e00e080abeceb1502"
+}

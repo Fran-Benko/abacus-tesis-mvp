@@ -1,0 +1,5 @@
+{
+  "threshold_high": 0.3,
+  "default_class": "LOW",
+  "model": "logistic"
+}

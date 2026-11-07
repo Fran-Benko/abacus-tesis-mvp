@@ -180,22 +180,52 @@ variables antes de construir el corpus.
 
 ### 4.1 Modelos
 
-- [ ] Baseline mayoritario.
-- [ ] Regresión logística multinomial (interpretable, coeficientes auditables).
-- [ ] Random Forest (captura interacciones no lineales, importancia de variables).
+- [x] Baseline mayoritario.
+- [x] Regresión logística multinomial (interpretable, coeficientes auditables).
+- [x] Random Forest (captura interacciones no lineales, importancia de variables).
 
 ### 4.2 Evaluación
 
-- [ ] Validación cruzada estratificada dentro del entrenamiento.
-- [ ] Calibración de probabilidades.
-- [ ] Selección de umbrales.
-- [ ] Métricas: Macro F1, Recall por clase, matriz de confusión, Balanced
-      Accuracy, Log Loss, Brier Score, curva de calibración, latencia P50/P95/P99.
-- [ ] Criterio principal: **Recall de HIGH** (un falso negativo de alto riesgo
+- [x] Validación cruzada estratificada dentro del entrenamiento.
+- [x] Calibración de probabilidades (isotónica sobre `calibration`).
+- [x] Selección de umbrales (umbral HIGH optimizado sobre `calibration`).
+- [x] Métricas: Macro F1, Recall por clase, matriz de confusión, Balanced
+      Accuracy, Log Loss, Brier Score, latencia P50/P95/P99.
+- [x] Criterio principal: **Recall de HIGH** (un falso negativo de alto riesgo
       es más grave que una revisión humana adicional).
-- [ ] Análisis de errores.
+- [x] Análisis de errores (desacuerdo entre modelos + perfil de FN HIGH).
+
+### 4.3 Entregables (Fase 3)
+
+- [x] Entrenador versionado → [`scripts/train_risk_model.py`](../scripts/train_risk_model.py)
+      (baseline + logística + RF; variantes de features full/ctx_payload/control;
+      CV 5-fold estratificada en train; calibración isotónica y umbral sobre
+      calibration; métricas sobre la partición evaluation congelada).
+- [x] Artefactos del modelo → [`data/models/risk_model_v1/`](../data/models/risk_model_v1/)
+      (`pipeline.joblib`, `thresholds.json`, `model_meta.json`,
+      `experiment_results.json`; digest SHA-256 de artefactos).
+- [x] Tests → [`tests/unit/test_analytics.py`](../tests/unit/test_analytics.py)
+      (9 tests: preprocesador, encoding, split, CV, umbral, métricas,
+      anti-circularidad, reproducibilidad, artefactos).
+- [x] Dependencia `scikit-learn>=1.5` agregada a [`pyproject.toml`](../pyproject.toml).
+
+### 4.4 Resultado
+
+- **Modelo elegido:** regresión logística multinomial (Macro F1 0.9985 vs
+  RF 1.0000; diferencia ≤ 0.01 → se prefiere interpretabilidad; coeficientes
+  auditables, requerimiento de la tesis).
+- **Métricas (evaluation congelada, 600 filas):** Recall HIGH **1.0**,
+  Recall LOW 0.997, Recall MEDIUM 1.0; Balanced Accuracy 0.9989; Log Loss
+  0.034; Brier HIGH 0.010; latencia p50 **11.6 ms** / p95 12.1 / p99 12.1.
+- **Descomposición de señal (CV train):** `ctx_payload` domina (log 0.936 /
+  RF 0.977); `control` solo 0.695/0.691 → las señales de gobierno NO determinan
+  la etiqueta (spec §2.3 confirmada empíricamente).
+- **0 falsos negativos de HIGH** en evaluation; RF y logística discrepan en 1
+  fila. Reproducible: misma seed ⇒ mismas métricas y `artifact_digest`.
 
 **Criterio de salida:** modelo elegido con métricas reproducibles.
+✔ Verificado: suite completa **221 passed** (212 baseline + 9 analytics);
+corpus sigue `RESULTADO: OK`.
 
 ---
 
