@@ -4,8 +4,8 @@ Implementa un subconjunto del contrato psycopg suficiente para ejecutar los
 servicios reales del flujo de gobernanza HITL end-to-end sin una base de datos
 real: `governance_decisions`, `governance_events`, `risk_predictions`,
 `approval_requests`, `approval_resume_tokens`, `execution_results`,
-`policy_decisions`, `audit_chain` y las vistas `v_governance_console`,
-`v_approval_console`, `v_risk_evidence`.
+`policy_decisions`, `audit_chain`, `model_drift_reports` y las vistas
+`v_governance_console`, `v_approval_console`, `v_risk_evidence`.
 
 Los servicios usan `connection_factory` inyectable, por lo que basta con
 proporcionar una fabrica que devuelva esta conexion en memoria. Cada conexion
@@ -38,6 +38,7 @@ def _new_store() -> dict[str, dict[str, dict[str, Any]]]:
         "execution_results": {},
         "policy_decisions": {},
         "audit_chain": {},
+        "model_drift_reports": {},
     }
 
 
@@ -120,6 +121,10 @@ class MemConn:
             return self._insert_policy_decision(params)
         if "INSERT INTO AUDIT_CHAIN" in upper:
             return self._insert_audit_chain(params)
+        if "INSERT INTO MODEL_DRIFT_REPORTS" in upper:
+            return self._insert_model_drift_report(params)
+        if "FROM MODEL_DRIFT_REPORTS" in upper:
+            return self._select_model_drift_reports(sql, params)
         if "UPDATE APPROVAL_REQUESTS" in upper:
             return self._update_approval_request(params)
         if "UPDATE APPROVAL_RESUME_TOKENS" in upper:
@@ -685,4 +690,53 @@ class MemConn:
             self.store["audit_chain"].values(),
             key=lambda r: r["sequence"],
         )
+        return (0, rows)
+
+    def _insert_model_drift_report(self, params):
+        import json
+
+        r = {
+            "report_id": params.get("report_id"),
+            "model_id": params.get("model_id"),
+            "model_version": params.get("model_version"),
+            "feature_schema_version": params.get("feature_schema_version"),
+            "generated_at": _utcnow(),
+            "class_psi": params.get("class_psi"),
+            "feature_psi": params.get("feature_psi"),
+            "class_distribution_baseline": params.get("class_distribution_baseline"),
+            "class_distribution_observed": params.get(
+                "class_distribution_observed"
+            ),
+            "severity_class": params.get("severity_class"),
+            "severity_global": params.get("severity_global"),
+            "sample_size_baseline": params.get("sample_size_baseline"),
+            "sample_size_observed": params.get("sample_size_observed"),
+            "features_compared": params.get("features_compared"),
+        }
+        # Los JSON llegan como strings desde el store; los normalizamos.
+        for key in (
+            "feature_psi",
+            "class_distribution_baseline",
+            "class_distribution_observed",
+        ):
+            val = r.get(key)
+            if isinstance(val, str):
+                try:
+                    r[key] = json.loads(val)
+                except (TypeError, ValueError):
+                    r[key] = {}
+        self.store["model_drift_reports"][r["report_id"]] = r
+        return (1, [])
+
+    def _select_model_drift_reports(self, sql, params):
+        rows = [
+            dict(r)
+            for r in sorted(
+                self.store["model_drift_reports"].values(),
+                key=lambda r: r["generated_at"] or _utcnow(),
+                reverse=True,
+            )
+        ]
+        if params.get("limit"):
+            rows = rows[: int(params["limit"])]
         return (0, rows)

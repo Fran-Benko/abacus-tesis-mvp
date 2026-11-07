@@ -17,6 +17,7 @@ rechaza (solo opera sobre bases de test dedicadas).
 from __future__ import annotations
 
 import os
+import time
 
 import psycopg
 import pytest
@@ -53,12 +54,12 @@ def pg_conn():
 
 @requires_pg
 def test_migraciones_en_head(pg_conn):
-    """Las migraciones estan aplicadas hasta 006 (head)."""
+    """Las migraciones estan aplicadas hasta 007 (head)."""
     with pg_conn.cursor() as cur:
         cur.execute("SELECT version_num FROM alembic_version")
         row = cur.fetchone()
     assert row is not None, "alembic_version no existe"
-    assert row[0] == "006", f"head esperado 006, got {row[0]}"
+    assert row[0] == "007", f"head esperado 007, got {row[0]}"
 
 
 @requires_pg
@@ -75,6 +76,7 @@ def test_tablas_clave_existen(pg_conn):
         "audit_chain",
         "risk_model_versions",
         "risk_predictions",
+        "model_drift_reports",
     }
     with pg_conn.cursor() as cur:
         cur.execute(
@@ -250,3 +252,77 @@ def test_view_evidence_no_expone_payload(pg_conn):
         assert forbidden not in cols, f"v_risk_evidence expone {forbidden}"
     for required in ("prediction_id", "final_action", "final_reason_code"):
         assert required in cols, f"falta {required} en v_risk_evidence"
+
+
+@requires_pg
+def test_model_drift_reports_grants_y_insert(pg_conn):
+    """model_drift_reports (migracion 007): la app escribe; consola solo lee.
+
+    Valida el patron de grants minimos: `argentgob_app` (owner) tiene
+    SELECT/INSERT/UPDATE; los roles de consola solo SELECT. Además inserta un
+    reporte real y lo relee para confirmar que la tabla es operativa.
+    """
+    console_roles = [
+        "argentgob_console_viewer",
+        "argentgob_console_auditor",
+        "argentgob_console_operator",
+    ]
+    with pg_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT grantee, privilege_type
+            FROM information_schema.role_table_grants
+            WHERE table_schema = 'public'
+              AND table_name = 'model_drift_reports'
+            """
+        )
+        grants = {}
+        for grantee, priv in cur.fetchall():
+            grants.setdefault(grantee, set()).add(priv)
+
+    # El owner de la tabla es `argentgob_app`; el migrator ejecuta las DDL y
+    # no recibe grants explicitos (mismo criterio que las migraciones 005/006).
+    app_privs = grants.get("argentgob_app", set())
+    assert {"SELECT", "INSERT"}.issubset(app_privs), (
+        f"argentgob_app deberia escribir model_drift_reports, tiene {app_privs}"
+    )
+    for role in console_roles:
+        privs = grants.get(role, set())
+        assert privs == {"SELECT"}, (
+            f"{role} deberia tener solo SELECT sobre model_drift_reports, tiene {privs}"
+        )
+
+    # Insercion operativa real (fail-open del DriftStore).
+    from argentgob.analytics.drift_store import DriftStore
+
+    report = {
+        "report_id": "drift-pgtest-" + str(int(time.time())),
+        "model_id": "risk_model_v1",
+        "model_version": "v1",
+        "feature_schema_version": "v1",
+        "class_psi": 0.05,
+        "feature_psi": '{"context.hour_bucket": 0.02}',
+        "class_distribution_baseline": '{"LOW": 0.5, "MEDIUM": 0.3, "HIGH": 0.2}',
+        "class_distribution_observed": '{"LOW": 0.45, "MEDIUM": 0.35, "HIGH": 0.2}',
+        "severity": "sin_deriva",
+        "sample_sizes": {"baseline": 3000, "observed": 120},
+        "features_compared": 1,
+    }
+    store = DriftStore(connection_factory=_pg_factory)
+    report_id = store.record_report(report)
+
+    with pg_conn.cursor() as cur:
+        cur.execute(
+            "SELECT class_psi, severity_class FROM model_drift_reports "
+            "WHERE report_id = %(r)s",
+            {"r": report_id},
+        )
+        row = cur.fetchone()
+    assert row is not None, "el reporte insertado no se relee"
+    assert abs(row[0] - 0.05) < 1e-6
+
+
+def _pg_factory():
+    import psycopg as _psycopg
+
+    return _psycopg.connect(_native_url(), autocommit=True)

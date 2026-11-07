@@ -17,6 +17,12 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from argentgob.analytics.drift import (
+    load_corpus_baseline,
+    psi_from_counts,
+    severity,
+)
+from argentgob.analytics.drift_store import DriftStore
 from argentgob.analytics.evidence import (
     ModelEvidenceService,
     PredictionQueryService,
@@ -228,3 +234,76 @@ def _render_model_evidence() -> None:
         )
     else:
         st.info("Sin bins con datos para la curva de calibración.")
+
+
+def render_drift_section() -> None:
+    """Renderiza el monitoreo de deriva (PSI): baseline vs observado."""
+    st.divider()
+    st.header("📉 Monitoreo de deriva del modelo")
+    st.caption(
+        "PSI (Population Stability Index) entre la distribución de referencia "
+        "del corpus y la distribución observada en producción · "
+        "Sin raw payload · INV-05"
+    )
+
+    baseline = load_corpus_baseline()
+
+    # Distribución observada desde las predicciones persistidas.
+    query = PredictionQueryService()
+    try:
+        metrics = query.metrics()
+    except Exception as exc:  # noqa: BLE001 - mostrar error de conexión en la UI
+        st.error(f"No se pudo leer la evidencia predictiva para la deriva: {exc}")
+        return
+
+    observed_counts = {
+        "LOW": metrics.get("low", 0),
+        "MEDIUM": metrics.get("medium", 0),
+        "HIGH": metrics.get("high", 0),
+    }
+    observed_total = sum(observed_counts.values())
+    if observed_total == 0:
+        st.info("Sin predicciones observadas todavía. La deriva no es medible.")
+        return
+
+    class_psi_val = psi_from_counts(
+        observed_counts,
+        {
+            k: round(v * baseline["sample_size"])
+            for k, v in baseline.get("class_distribution", {}).items()
+        },
+    )
+    sev = severity(class_psi_val)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("PSI de clases (global)", f"{class_psi_val:.4f}")
+    c2.metric("Severidad", sev)
+    c3.metric("Features comparables", len(baseline.get("feature_psi_support", [])))
+
+    st.markdown("**Distribución de clases: baseline (corpus) vs observada**")
+    dist_df = pd.DataFrame(
+        [
+            {
+                "Clase": k,
+                "Baseline (corpus)": baseline.get("class_distribution", {}).get(k, 0),
+                "Observada (producción)": round(
+                    observed_counts.get(k, 0) / observed_total, 4
+                ),
+            }
+            for k in ("LOW", "MEDIUM", "HIGH")
+        ]
+    )
+    st.dataframe(dist_df, use_container_width=True, height=150)
+
+    st.markdown("**Últimos reportes de deriva persistidos**")
+    store = DriftStore()
+    last = store.latest_reports(limit=10)
+    if last:
+        ldf = pd.DataFrame(last)
+        ldf["class_psi"] = ldf["class_psi"].round(4)
+        st.dataframe(ldf, use_container_width=True, height=260)
+    else:
+        st.info(
+            "Sin reportes persistidos todavía. La sección muestra el cálculo "
+            "en vivo; la persistencia queda registrada al correr el detector."
+        )

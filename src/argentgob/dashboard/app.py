@@ -14,11 +14,11 @@ import psycopg
 import streamlit as st
 from psycopg.rows import dict_row
 
-from argentgob.dashboard.evidence import render_evidence_section
 from argentgob.console.hitl_detail import HitlDetailService
 from argentgob.console.resolution import ResolutionService
 from argentgob.console.service import ConsoleQueryService
 from argentgob.core.config import get_settings
+from argentgob.dashboard.evidence import render_drift_section, render_evidence_section
 from argentgob.hitl.resolver import ApprovalResolver
 from argentgob.identity.provider import AuditorIdentityProvider
 from argentgob.identity.roles import AppRole
@@ -298,6 +298,9 @@ try:
     # ── Fase 5: evidencia predictiva (corpus → modelo → decisión) ────
     st.divider()
     render_evidence_section()
+
+    # ── Hito prioridad media: monitoreo de deriva del modelo ─────────
+    render_drift_section()
 
 except Exception as exc:  # noqa: BLE001 - mostrar error de conexión en la UI
     st.error(f"Error conectando a la base de datos: {exc}")
