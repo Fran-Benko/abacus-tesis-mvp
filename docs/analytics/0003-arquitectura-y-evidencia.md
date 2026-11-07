@@ -215,8 +215,12 @@ en cada bin `mean_predicted ≈ observed_frequency` (verificable en el dashboard
 
 - **Validez externa:** el corpus es sintético; se requiere un corpus real
   etiquetado para afirmar generalización.
-- **Monitoreo de deriva:** no implementado; la tabla `risk_model_versions`
-  deja el lugar para registrar nuevas versiones y comparar métricas.
+- **Monitoreo de deriva:** implementado en el hito de prioridad media
+  (`docs/sessions/0018-resumen-monitoreo-deriva.md`): PSI (Population
+  Stability Index) entre el baseline del corpus y la distribución observada
+  en producción, con severidad (sin_deriva < 0.10 < moderada < 0.25 <
+  significativa), persistencia en `model_drift_reports` (migración 007,
+  grants mínimos) y sección en el dashboard.
 - **Detector PII probabilístico:** fuera de alcance; los regex siguen siendo
   la barrera dura.
 - **HITL con modelo activo:** el protocolo H6 está implementado y probado,

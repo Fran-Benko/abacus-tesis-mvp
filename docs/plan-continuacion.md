@@ -424,10 +424,12 @@ correcto, reflejado en dashboard y auditoría. Suite completa: **259 passed**
 - ✅ Suite completa: **271 passed + 6 skipped** (263 + 8 nuevos; PG real se salta sin `TEST_DATABASE_URL`).
 
 **Prioridad media (evolución posterior):**
+- ✅ Monitoreo de deriva del modelo (`0018`): PSI entre baseline del corpus y
+  distribución observada, severidad, persistencia en `model_drift_reports`
+  (migración 007) y sección de deriva en el dashboard.
 - Refinar políticas declarativas.
 - Mejorar visualizaciones históricas.
 - Detector PII probabilístico.
-- Monitoreo de deriva del modelo.
 
 ---
 
