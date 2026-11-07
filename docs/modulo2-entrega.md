@@ -152,6 +152,69 @@ El prototipo procesa efectivamente:
   - Dado un intento de resolución sin evidencia de autenticación, entonces se bloquea (estado `blocked`).
   - Dada una consulta de la consola, entonces ninguna respuesta contiene `execution_arguments` ni raw payload (INV-05).
 
+  **H1 — Envelope canónico de tool call (Tarjeta)**
+  > Como **plataforma de gobernanza**, quiero representar cada tool call en un envelope canónico que separe ejecución de telemetría, para que ninguna herramienta corra antes de una decisión y el payload crudo no viaje por canales de observabilidad.
+
+  - **Conversación:** `ToolCallEnvelope` (src/argentgob/core/envelope.py) separa `execution_arguments` (reales, solo memoria) de `telemetry_arguments` (sanitizados, para logs/DB); calcula `payload_digest` (SHA-256 del JSON canónico) y `payload_size_bytes`; la identidad del agente (`AgentIdentity`) exige id, rol y versión.
+  - **Confirmación (criterios de aceptación medibles):**
+    - Dado un tool call interceptado, cuando se construye el envelope, entonces contiene `event_id`, `session_id`, `payload_digest` y `payload_size_bytes` válidos.
+    - Dado un envelope, cuando se verifica el digest contra los argumentos, entonces `verify_digest()` retorna `True` (y `False` si se alteran los argumentos).
+    - Dada una identidad incompleta (sin id, rol o versión), cuando se evalúa `_identity_complete`, entonces se bloquea (INV-15 fail-closed).
+
+  **H2 — Sanitizador de PII y truncado de payloads (Tarjeta)**
+  > Como **plataforma de gobernanza**, quiero sanitizar PII y truncar payloads antes de la telemetría, para no filtrar datos personales en logs ni bases de datos (INV-05).
+
+  - **Conversación:** `Sanitizer` (src/argentgob/module_b/sanitizer.py) aplica regex deterministas (EMAIL, SECRET, PAYMENT_NUMBER, POSSIBLE_DNI), trunca cadenas según `max_string_bytes` y limita profundidad/nodos JSON (`max_json_depth`, `max_json_nodes`).
+  - **Confirmación:**
+    - Dado un argumento con email/secret/número de pago/DNI, cuando se sanitiza, entonces esos valores se redactan y el resto permanece intacto.
+    - Dado un payload que excede `max_payload_bytes`, cuando se valida el envelope, entonces el PEP bloquea con `PAYLOAD_LIMIT_EXCEEDED` (INV-14) antes del scanner costoso.
+    - Dado un argumento anidado más profundo que `max_json_depth`, cuando se sanitiza, entonces se trunca de forma segura sin excepción.
+
+  **H3 — Evaluador ABAC por perfil con fallback in-memory (Tarjeta)**
+  > Como **administrador de seguridad**, quiero evaluar cada tool call contra el perfil ABAC del agente, para que ninguna herramienta no autorizada se ejecute.
+
+  - **Conversación:** `ABACEvaluator` (src/argentgob/module_c/abac_evaluator.py) decide con `allowed_tools` del perfil; `DeterministicEvaluator` (module_c) aplica la precedencia `BLOCK > HITL > PASS`; `PolicyStore` carga políticas desde `governance_policies` con fallback in-memory si la DB no está disponible (fail-closed solo para escrituras).
+  - **Confirmación:**
+    - Dado un perfil sin permiso para una herramienta, cuando se evalúa, entonces se bloquea con `TOOL_NOT_ALLOWED` y la tool no se ejecuta (`call_count == 0`).
+    - Dada una herramienta permitida, cuando se evalúa, entonces pasa y ejecuta.
+    - Dada la DB caída, cuando se consultan políticas, entonces se usan las políticas en memoria del perfil (el enforcement no queda sin fuentes).
+
+  **H4 — Guardrails de dominio (Tarjeta)**
+  > Como **plataforma de gobernanza**, quiero aplicar guardrails de dominio (inyección, relevancia, rate limit), para bloquear intentos maliciosos o fuera de contexto antes de la ejecución.
+
+  - **Conversación:** `GuardrailEngine` (src/argentgob/module_c/guardrails.py) ejecuta por tool call: `query_injection` (patrones SQL/shell/script en la telemetría), `topic_relevance` (dominio de la consulta) y `rate_limit` (máximo de llamadas por corrida).
+  - **Confirmación:**
+    - Dada una consulta con inyección SQL/shell, cuando se ejecuta el guardrail, entonces el PEP bloquea con `query_injection` y la tool no ejecuta.
+    - Dada una consulta fuera del dominio financiero, cuando se evalúa `topic_relevance`, entonces se bloquea (o se exige revisión) sin ejecutar.
+    - Dado que se supera `rate_limit_calls_per_run`, cuando llega la siguiente tool call, entonces se bloquea por `rate_limit`.
+
+  **H9 — Integración con CrewAI (GovernedTool) (Tarjeta)**
+  > Como **plataforma de gobernanza**, quiero envolver las herramientas CrewAI con `GovernedTool`, para que cada tool call del agente pase por el PEP sin que el dispatcher de CrewAI pueda evadirlo.
+
+  - **Conversación:** `GovernedTool` (src/argentgob/module_a/governed_tool.py) es la clase base que corre `pre_hook` → `_execute` → `post_hook`; `src/argentgob/agent/crew.py` construye el Crew con herramientas gobernadas (`NewsTool`, `StockPriceTool`, `CryptoPriceTool`); una excepción interna del hook aborta fail-closed.
+  - **Confirmación:**
+    - Dada una tool CrewAI envuelta, cuando el agente la invoca, entonces `pre_hook` corre antes del executor y ninguna tool corre sin `decision_id` (INV-01).
+    - Dado un BLOCK en el `pre_hook`, entonces `GovernedTool._run` aborta con `HookAborted` y la tool no ejecuta (INV-02).
+    - Dado un error interno del hook, entonces se aborta fail-closed (no se confía en que el dispatcher propague la excepción).
+
+  **H10 — Dashboard de monitoreo en tiempo real (Tarjeta)**
+  > Como **analista/operador**, quiero un dashboard que muestre decisiones, eventos y métricas en tiempo real, para monitorear la gobernanza sin exponer payloads crudos.
+
+  - **Conversación:** Streamlit (`src/argentgob/dashboard/app.py`) con auto-refresh (5 s); KPIs (total, PASS, BLOCK, latencia pre-hook), decisiones recientes, eventos, distribución por herramienta, sección H8 (consola sanitizada + resolución) y sección Fase 5 (evidencia predictiva) sobre las vistas `v_governance_console`, `v_approval_console` y `v_risk_evidence`.
+  - **Confirmación:**
+    - Dado un flujo de decisiones, cuando se consulta el dashboard, entonces muestra los KPIs y las decisiones recientes sin `execution_arguments` en ninguna respuesta (INV-05).
+    - Dado un HITL pendiente, cuando se consulta la sección H8, entonces aparece en la lista de pending con su `argument_digest` (nunca argumentos en claro).
+    - Dadas las predicciones de la Fase 5, entonces el dashboard muestra: distribución LOW/MEDIUM/HIGH, HITL/BLOCK originados por predicción y matriz/calibración del modelo.
+
+  **H11 — Suite de tests unitarios e integración (Tarjeta)**
+  > Como **equipo de desarrollo**, quiero una suite automática de tests unitarios e integración, para verificar los invariantes y el comportamiento completo de la gobernanza.
+
+  - **Conversación:** pytest con `tests/unit` (componentes y contratos), `tests/integration` (flujos agénticos, HITL end-to-end, concurrencia, PostgreSQL real), tests de auditoría encadenada (H7), consola (H8) y capa predictiva (Fase 4–5); los E2E (`scripts/e2e_*.py`) validan el stack real contra PostgreSQL.
+  - **Confirmación:**
+    - Dado el repositorio, cuando se ejecuta `pytest tests/`, entonces la suite completa pasa (unit + integración) sin red ni LLM dependencias para los tests deterministas.
+    - Dado un flujo agéntico (usuario con agente de IA), cuando se ejecuta la integración, entonces valida que se prediga/bloquee lo correcto y que el resultado se refleje en dashboard y auditoría.
+    - Dado el stack levantado, cuando se ejecutan los E2E (`e2e_fase4_predictive`, `e2e_fase5_evidence`, `e2e_h8_console`), entonces todos los checks pasan contra PostgreSQL real.
+
 ### 3.3 Sprint Backlog (sprints iniciales)
 
 **Sprint 1 (fundamentos):** H1, H2, H3, H4 — envelope, sanitizador, ABAC y guardrails (3+5+5+8 = **21 PH**).
@@ -160,6 +223,72 @@ El prototipo procesa efectivamente:
 **Sprint 4 (operación):** H11 — suite de tests (8 PH) + empaquetado, despliegue y verificación E2E (8 PH) = **16 PH**.
 
 **Total sprints: 94 PH.** (21+31+26+16) — cubre las 81 PH del backlog; la diferencia (13 PH) corresponde a tareas operativas de integración (HITL end-to-end, empaquetado, despliegue y verificación E2E) que no forman parte de las historias.
+
+#### Descomposición en tareas con esfuerzo y dependencias
+
+**Sprint 1 — Fundamentos (21 PH)**
+
+| # | Tarea | Historia | Esfuerzo | Depende de |
+|---|-------|----------|----------|------------|
+| 1.1 | Definir `AgentIdentity` y `ToolCallEnvelope` (event_id, session_id, digest, size) | H1 | 2 PH | — |
+| 1.2 | Separación `execution_arguments`/`telemetry_arguments` + `verify_digest` | H1 | 1 PH | 1.1 |
+| 1.3 | `Sanitizer` con regex deterministas (EMAIL, SECRET, PAYMENT_NUMBER, DNI) | H2 | 3 PH | — |
+| 1.4 | Truncado de cadenas y límites de profundidad/nodos JSON | H2 | 2 PH | 1.3 |
+| 1.5 | `ABACEvaluator` con `allowed_tools` por perfil + fallback in-memory | H3 | 3 PH | 1.1 |
+| 1.6 | `DeterministicEvaluator` con precedencia `BLOCK > HITL > PASS` | H3 | 2 PH | 1.5 |
+| 1.7 | Guardrails `query_injection`, `topic_relevance`, `rate_limit` | H4 | 5 PH | 1.6 |
+| 1.8 | Tests unitarios de envelope, sanitizador, ABAC y guardrails | H4 | 3 PH | 1.2, 1.4, 1.7 |
+
+**Sprint 2 — Enforcement + persistencia (31 PH)**
+
+| # | Tarea | Historia | Esfuerzo | Depende de |
+|---|-------|----------|----------|------------|
+| 2.1 | `GovernanceMiddleware.pre_hook` (construir envelope, sanitizar, evaluar) | H5 | 5 PH | 1.6, 1.7 |
+| 2.2 | `PolicyStore` con carga desde `governance_policies` + caché TTL/vigencia | H5 | 4 PH | 1.5 |
+| 2.3 | Migración 002: `policy_decisions`, `execution_results` + índices | H5 | 4 PH | 2.2 |
+| 2.4 | `GovernedTool` + hook CrewAI (INV-01/INV-02) | H9 | 3 PH | 2.1 |
+| 2.5 | `AuditWriter` persistente (decisiones + resultados) | H7 | 2 PH | 2.3 |
+| 2.6 | Migración 003: `audit_chain` + trigger append-only + owner dedicado | H7 | 6 PH | 2.5 |
+| 2.7 | Verificador de cadena (`audit/verify.py`) + CLI | H7 | 5 PH | 2.6 |
+| 2.8 | Tests H5/H7 (round-trip de decisión, cadena tamper-evident) | H7 | 2 PH | 2.7 |
+
+**Sprint 3 — HITL + consola (26 PH)**
+
+| # | Tarea | Historia | Esfuerzo | Depende de |
+|---|-------|----------|----------|------------|
+| 3.1 | `InMemoryArgumentHold` idempotente y acotado | H6 | 3 PH | 2.1 |
+| 3.2 | `ApprovalService` durable + token opaco (hash) | H6 | 4 PH | 3.1 |
+| 3.3 | `ApprovalNotifier` + `ConsoleNotifier` | H6 | 2 PH | 3.2 |
+| 3.4 | `GovernedResumeService` (revalidar + consumir + capability 1-uso) | H6 | 4 PH | 3.2, 3.1 |
+| 3.5 | `ExecutionOrchestrator` (SUCCESS/FAILED/UNKNOWN) | H6 | 3 PH | 3.4 |
+| 3.6 | `ConsoleQueryService` + vista `v_governance_console` (sanitizada) | H8/H10 | 3 PH | 2.3 |
+| 3.7 | `ResolutionService` + identidad/evidencia (H8) + vista `v_approval_console` | H8 | 3 PH | 3.5, 3.6 |
+| 3.8 | Dashboard Streamlit (KPIs, decisiones, H8, Fase 5) | H10 | 2 PH | 3.7, 2.5 |
+| 3.9 | Test HITL end-to-end (predicción MEDIUM → approval → resolución → ejecución) | H6 | 2 PH | 3.7, 3.5 |
+
+**Sprint 4 — Operación (16 PH)**
+
+| # | Tarea | Historia | Esfuerzo | Depende de |
+|---|-------|----------|----------|------------|
+| 4.1 | Suite unitaria completa + marcador integración | H11 | 3 PH | 2.8, 3.9 |
+| 4.2 | Tests de integración de flujos agénticos (varias tool calls por sesión) | H11 | 3 PH | 4.1 |
+| 4.3 | Tests de concurrencia (agentes paralelos, idempotencia) + PostgreSQL real | H11 | 2 PH | 4.2 |
+| 4.4 | Empaquetado (Containerfile, compose, migraciones explícitas) | — | 3 PH | 4.1 |
+| 4.5 | E2E contra stack real (`e2e_fase4`, `e2e_fase5`, `e2e_h8`) | — | 3 PH | 4.4 |
+| 4.6 | Verificación de reproducibilidad (suite completa + cadena de auditoría) | — | 2 PH | 4.5 |
+
+**Cierre del hito (prioridad alta pendiente, entregado en este trabajo):**
+
+| # | Tarea | Entregable | Esfuerzo | Depende de |
+|---|-------|------------|----------|------------|
+| C.1 | Completar criterios de aceptación H1–H4 y H9–H11 en `modulo2-entrega.md` | Documentación | 1 PH | 4.1 |
+| C.2 | Verificar HITL end-to-end con el modelo activo (test `test_hitl_end_to_end.py`) | Test de integración | 2 PH | 3.9 |
+| C.3 | Test PostgreSQL real (`test_postgres_real.py`: migraciones, constraints, grants, vistas) | Test de integración | 2 PH | 4.3 |
+| C.4 | Tests de concurrencia (`test_concurrency.py`: aislamiento, idempotencia, digests) | Test de integración | 2 PH | 4.3 |
+| C.5 | Documentar relaciones y cardinalidades completas | Documentación | 1 PH | 4.2 |
+| C.6 | Actualizar plan de continuación e hitos de prioridad alta | Documentación | 1 PH | C.1–C.5 |
+
+**Total: 4 sprints (94 PH) + cierre del hito (9 PH) = 103 PH** — cubre el backlog de 81 PH y las tareas operativas de integración, verificación y evidencia.
 
 ### 3.4 Aplicación de la Metodología Analítica (CRISP-DM)
 
@@ -247,6 +376,29 @@ El esquema se construye mediante 4 migraciones Alembic aplicadas en orden.
 **Grants:** los roles de consola (`argentgob_console_viewer`, `_auditor`, `_operator`) solo leen la vista, `risk_predictions` y `risk_model_versions`.
 
 > **Trazabilidad:** `corpus_v1` → `risk_model_v1` (`artifact_digest`) → `risk_predictions` → `governance_decisions` → `v_risk_evidence` → dashboard. Ver [0003-arquitectura-y-evidencia.md](analytics/0003-arquitectura-y-evidencia.md).
+
+#### Relaciones y cardinalidades (modelo completo)
+
+| Relación | Cardinalidad | Notas |
+|---|---|---|
+| `governance_policies` → `policy_decisions` | 1 : 0..N | Una política (versión) puede explicar muchas decisiones. |
+| `governance_events` → `policy_decisions` | 1 : 0..1 | Una decisión por evento (`event_id` único). |
+| `policy_decisions` → `execution_results` | 1 : 0..1 | Un resultado de ejecución por evento. |
+| `policy_decisions` → `risk_predictions` | 1 : 0..1 | Una predicción por evento (`prediction_id = pred-<event_id>`). |
+| `risk_model_versions` → `risk_predictions` | 1 : 0..N | Una versión del modelo puede explicar muchas predicciones. |
+| `policy_decisions` → `approval_requests` | 1 : 0..N | Solo cuando la decisión es HITL (0..1 en la práctica por evento). |
+| `approval_requests` → `approval_resume_tokens` | 1 : 0..N | Una approval puede emitir uno o varios tokens (uno activo por resolución). |
+| `approval_requests` → `audit_chain` | 1 : 0..N | Cada resolución/evento puede tener entradas de auditoría. |
+| `policy_decisions` → `audit_chain` | 1 : 0..N | La decisión completa se asegura en la cadena. |
+| `governance_events` → `audit_chain` | 1 : 0..1 | El evento de ejecución referenciado por la cadena. |
+| `governance_decisions` → `risk_predictions` | 1 : 0..1 | La vista `v_risk_evidence` cruza por `event_id` (no por FK). |
+| `corpus_v1` (parquet) → `risk_model_versions` | 1 : 1 | `training_dataset_version` referencia el corpus; `artifact_digest` fija el modelo. |
+
+**Invariantes de cardinalidad:**
+- `event_id` es único en `policy_decisions`, `approval_requests` y `execution_results` (una tool call = un evento lógico).
+- `governance_decisions`/`governance_events` (R0) coexisten con `policy_decisions`/`execution_results` (H5): las primeras son la traza de auditoría R0; las segundas, el round-trip H5 completo. `v_governance_console` une estas fuentes para el dashboard.
+- `risk_predictions.prediction_id = 'pred-' + event_id` garantiza 1:1 con la tool call; la FK se vincula al `decision_id` en el upsert (PredictionStore).
+- `approval_requests.idempotency_key` es único (`hitl:<event_id>`): la misma tool call no crea approvals duplicadas.
 
 ### 3.6 Prototipo de Interfaces de Pantalla (Wireframes)
 

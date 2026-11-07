@@ -407,11 +407,16 @@ correcto, reflejado en dashboard y auditoría. Suite completa: **259 passed**
 6. ✅ Persistir y visualizar las predicciones (Fase 5).
 7. ✅ Tests de integración de flujos agénticos (Fase 6).
 
-**Prioridad alta (pendiente):**
-- Completar criterios de aceptación de H1-H4 y H8-H11.
-- Verificar HITL end-to-end con el modelo activo.
-- Detallar relaciones y cardinalidades.
-- Crear Sprint Backlogs con tareas, esfuerzo y dependencias.
+**Prioridad alta (completada):**
+- ✅ Completar criterios de aceptación de H1-H4 y H8-H11 (documentados en `modulo2-entrega.md` §3.2: formato 3 Cs con Confirmación medible).
+- ✅ Verificar HITL end-to-end con el modelo activo (`tests/integration/test_hitl_end_to_end.py`): predicción MEDIUM → approval → resolución aprobada por auditor → resume → ejecución gobernada → reflejo en dashboard.
+- ✅ Detallar relaciones y cardinalidades (documentadas en `modulo2-entrega.md` §3.5 y `docs/analytics/0003` §2.2).
+- ✅ Crear Sprint Backlogs con tareas, esfuerzo y dependencias (`modulo2-entrega.md` §3.3, descomposición por sprint + cierre del hito).
+
+**Además, en este hito:**
+- ✅ Test de PostgreSQL real (`tests/integration/test_postgres_real.py`): migraciones en head, constraints/CHECK, grants mínimos de roles de consola y vistas sanitizadas.
+- ✅ Tests de concurrencia (`tests/integration/test_concurrency.py`): dos agentes paralelos con aislamiento de decisiones, idempotencia de approvals y sin contaminación de digests.
+- ✅ Suite completa: **269 passed** (263 + 6 PG real con `TEST_DATABASE_URL`).
 
 **Prioridad media (evolución posterior):**
 - Refinar políticas declarativas.
