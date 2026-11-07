@@ -418,6 +418,11 @@ correcto, reflejado en dashboard y auditoría. Suite completa: **259 passed**
 - ✅ Tests de concurrencia (`tests/integration/test_concurrency.py`): dos agentes paralelos con aislamiento de decisiones, idempotencia de approvals y sin contaminación de digests.
 - ✅ Suite completa: **269 passed** (263 + 6 PG real con `TEST_DATABASE_URL`).
 
+**Sesgos de la Fase 6 cerrados (hito de perfiles y CrewAI):**
+- ✅ Cobertura de perfiles (`tests/integration/test_perfiles_adicionales.py`): perfil `admin` (sin guardrails, `max_tool_calls=20`, query no financiera ejecutada con predicción LOW) y transformación de argumentos end-to-end (`USE_TRANSFORMED_ARGUMENTS` normaliza; `USE_ORIGINAL_ARGUMENTS` conserva; incompatibles → `POLICY_CONFLICT` con cero ejecución).
+- ✅ CrewAI real (`tests/integration/test_crewai_real.py`): `NewsTool` real ejecutada vía `BaseTool.run()` (ruta pública CrewAI) con providers inyectados; PASS ejecuta el provider 1 vez; BLOCK por predicción HIGH o guardrail no consulta el provider (INV-02).
+- ✅ Suite completa: **271 passed + 6 skipped** (263 + 8 nuevos; PG real se salta sin `TEST_DATABASE_URL`).
+
 **Prioridad media (evolución posterior):**
 - Refinar políticas declarativas.
 - Mejorar visualizaciones históricas.

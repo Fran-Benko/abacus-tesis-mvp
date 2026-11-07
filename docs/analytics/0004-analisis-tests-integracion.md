@@ -127,27 +127,29 @@ decidir → persistir → consultar (dashboard) → auditar.
 
 > **Actualización (hito de prioridad alta):** los sesgos 1, 2 y 3 fueron
 > abordados en `docs/sessions/0016-resumen-hito-prioridad-alta.md`.
+>
+> **Actualización (hito de perfiles y CrewAI):** los sesgos 4 y 5 fueron
+> abordados en `docs/sessions/0017-resumen-sesgos-perfiles-crewai.md`.
 
 | # | Sesgo | Estado | Cobertura |
 |---|---|---|---|
 | 1 | **HITL end-to-end** (3.5): la resolución aprobada no se refleja en el flujo | ✅ Resuelto | `tests/integration/test_hitl_end_to_end.py`: predicción MEDIUM (modelo activo) → approval → resolución APPROVED por auditor → resume → ejecución gobernada → reflejo en dashboard |
 | 2 | **PostgreSQL real**: los tests usan conexión en memoria, no la DB real | ✅ Resuelto | `tests/integration/test_postgres_real.py` (skip sin `TEST_DATABASE_URL`): migraciones en head, constraints UNIQUE/CHECK, grants mínimos de roles de consola, flujo real LOW→PASS y vistas sanitizadas |
 | 3 | **Concurrencia**: no se validan carreras entre agentes | ✅ Resuelto | `tests/integration/test_concurrency.py`: dos agentes paralelos (aislamiento, sin colisiones de `event_id`, idempotencia de approvals, digests sin contaminación) |
-| 4 | **Cobertura de perfiles**: solo se prueban `analyst` y `analyst_restricted` | ⏳ Pendiente | Considerar `admin` y perfiles con transformación de argumentos |
-| 5 | **CrewAI real**: los tests usan `SpyTool`, no una tool CrewAI real | ⏳ Pendiente | Los E2E de compatibilidad deberían usar CrewAI real (según la norma) |
+| 4 | **Cobertura de perfiles**: solo se prueban `analyst` y `analyst_restricted` | ✅ Resuelto | `tests/integration/test_perfiles_adicionales.py`: perfil `admin` (sin guardrails, `max_tool_calls=20`, query no financiera ejecutada con predicción LOW) y transformación de argumentos (`USE_TRANSFORMED_ARGUMENTS` entrega args normalizados; `USE_ORIGINAL_ARGUMENTS` intactos; incompatibles → `POLICY_CONFLICT` con cero ejecución) |
+| 5 | **CrewAI real**: los tests usan `SpyTool`, no una tool CrewAI real | ✅ Resuelto | `tests/integration/test_crewai_real.py`: `NewsTool` real ejecutada vía `BaseTool.run()` (ruta pública CrewAI) con providers inyectados; PASS ejecuta el provider 1 vez; predicción HIGH y guardrail BLOCK no consultan el provider (INV-02) |
 
 ---
 
 ## 6. Conclusión
 
 La Fase 6 **redujo significativamente el sesgo** de los tests de integración
-(flujos agénticos con componentes reales y reflejo en dashboard), y el hito de
-**prioridad alta** cerró los tres sesgos más importantes que persistían: el
-**HITL end-to-end** (predicción MEDIUM → approval → resolución → ejecución
-gobernada), el uso de **PostgreSQL real** (constraints, roles y vistas) y la
-**concurrencia** entre agentes. La suite completa pasó a **269 tests**
-(263 unitarias/integración + 6 de PostgreSQL real).
+(flujos agénticos con componentes reales y reflejo en dashboard), el hito de
+**prioridad alta** cerró los tres sesgos más importantes (HITL end-to-end,
+PostgreSQL real y concurrencia), y el hito posterior **cerró los dos sesgos
+restantes**: la **cobertura de perfiles** (admin y transformación de argumentos
+end-to-end) y la validación con **CrewAI real** en la ruta pública de la tool.
 
-Quedan como evolución posterior: ampliar la **cobertura de perfiles** (admin,
-transformación de argumentos) y validar con **CrewAI real** en los E2E de
-compatibilidad.
+Con esto, los cinco sesgos de la Fase 6 quedan cubiertos y la suite completa
+pasó a **271 tests** (263 unitarias/integración + 8 nuevos + 6 de PostgreSQL
+real, que se saltan sin `TEST_DATABASE_URL`).

@@ -33,7 +33,7 @@ hito sin leer su gate.**
   y Fases 1–6 de la capa predictiva (definición analítica, corpus sintético,
   modelado, integración operacional, interfaz y evidencia académica, tests de
   integración de flujos agénticos).
-- **Suite de pruebas:** **259 passed** (unit + integración).
+- **Suite de pruebas:** **271 passed + 6 skipped** (unit + integración; los 6 skipped son de PostgreSQL real sin `TEST_DATABASE_URL`), y los cinco sesgos de la Fase 6 quedaron cerrados (`docs/analytics/0004`).
 - **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
 - **Dashboard:** Streamlit con KPIs, decisiones, eventos, distribución por
   herramienta, sección H8 (consola sanitizada + resolución autorizada) y
@@ -142,7 +142,7 @@ $src = (Get-Location).Path
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/ -q -p no:cacheprovider
 ```
 
-> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **259 passed**.
+> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **271 passed + 6 skipped** (263 + 8 nuevos de perfiles/CrewAI; PG real se salta sin `TEST_DATABASE_URL`).
 
 ### 4.3 Tests de integración
 
