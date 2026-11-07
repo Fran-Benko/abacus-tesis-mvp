@@ -125,22 +125,29 @@ decidir → persistir → consultar (dashboard) → auditar.
 
 ## 5. Sesgos que persisten (recomendaciones)
 
-| # | Sesgo | Recomendación |
-|---|---|---|
-| 1 | **HITL end-to-end** (3.5): la resolución aprobada no se refleja en el flujo | Agregar un test que: predicción MEDIUM → approval → resolución APPROVED → verificar que la ejecución gobernada ocurre y se refleja |
-| 2 | **PostgreSQL real**: los tests usan conexión en memoria, no la DB real | Los E2E (`e2e_fase4_predictive.py`, `e2e_fase5_evidence.py`) ya usan PostgreSQL real; considerar un test de integración con la DB real para validar constraints/roles |
-| 3 | **Concurrencia**: no se validan carreras entre agentes | Agregar tests de concurrencia (dos agentes ejecutando tool calls simultáneas) |
-| 4 | **Cobertura de perfiles**: solo se prueban `analyst` y `analyst_restricted` | Considerar `admin` y perfiles con transformación de argumentos |
-| 5 | **CrewAI real**: los tests usan `SpyTool`, no una tool CrewAI real | Los E2E de compatibilidad deberían usar CrewAI real (según la norma) |
+> **Actualización (hito de prioridad alta):** los sesgos 1, 2 y 3 fueron
+> abordados en `docs/sessions/0016-resumen-hito-prioridad-alta.md`.
+
+| # | Sesgo | Estado | Cobertura |
+|---|---|---|---|
+| 1 | **HITL end-to-end** (3.5): la resolución aprobada no se refleja en el flujo | ✅ Resuelto | `tests/integration/test_hitl_end_to_end.py`: predicción MEDIUM (modelo activo) → approval → resolución APPROVED por auditor → resume → ejecución gobernada → reflejo en dashboard |
+| 2 | **PostgreSQL real**: los tests usan conexión en memoria, no la DB real | ✅ Resuelto | `tests/integration/test_postgres_real.py` (skip sin `TEST_DATABASE_URL`): migraciones en head, constraints UNIQUE/CHECK, grants mínimos de roles de consola, flujo real LOW→PASS y vistas sanitizadas |
+| 3 | **Concurrencia**: no se validan carreras entre agentes | ✅ Resuelto | `tests/integration/test_concurrency.py`: dos agentes paralelos (aislamiento, sin colisiones de `event_id`, idempotencia de approvals, digests sin contaminación) |
+| 4 | **Cobertura de perfiles**: solo se prueban `analyst` y `analyst_restricted` | ⏳ Pendiente | Considerar `admin` y perfiles con transformación de argumentos |
+| 5 | **CrewAI real**: los tests usan `SpyTool`, no una tool CrewAI real | ⏳ Pendiente | Los E2E de compatibilidad deberían usar CrewAI real (según la norma) |
 
 ---
 
 ## 6. Conclusión
 
-La Fase 6 **reduce significativamente el sesgo** de los tests de integración:
-ahora reproducen un flujo agéntico real con componentes reales y validan el
-reflejo en el dashboard. Sin embargo, persisten sesgos importantes (HITL
-end-to-end, PostgreSQL real, concurrencia) que deberían abordarse en el
-siguiente hito para que la evaluación del funcionamiento sea completa y
-representativa del uso real por usuarios que ejecutan análisis agénticos con
-agentes de IA.
+La Fase 6 **redujo significativamente el sesgo** de los tests de integración
+(flujos agénticos con componentes reales y reflejo en dashboard), y el hito de
+**prioridad alta** cerró los tres sesgos más importantes que persistían: el
+**HITL end-to-end** (predicción MEDIUM → approval → resolución → ejecución
+gobernada), el uso de **PostgreSQL real** (constraints, roles y vistas) y la
+**concurrencia** entre agentes. La suite completa pasó a **269 tests**
+(263 unitarias/integración + 6 de PostgreSQL real).
+
+Quedan como evolución posterior: ampliar la **cobertura de perfiles** (admin,
+transformación de argumentos) y validar con **CrewAI real** en los E2E de
+compatibilidad.
