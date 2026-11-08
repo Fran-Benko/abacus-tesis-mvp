@@ -9,18 +9,22 @@ válida, y un BLOCK aborta la tentativa antes del side effect.
 import hashlib
 import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+# Fase 4 — Integración operacional: capa predictiva.
+from argentgob.analytics.features import FeatureBuilder
+from argentgob.analytics.predictor import RiskPredictor
+from argentgob.analytics.store import PredictionStore
 from argentgob.core.config import Settings
 from argentgob.core.envelope import AgentIdentity, ToolCallEnvelope
 from argentgob.core.errors import (
     GovernanceAction,
     HookAborted,
-    Obligation,
     ReasonCode,
 )
 from argentgob.db.audit import AuditWriter
+from argentgob.hitl.errors import HitlError
 from argentgob.module_b.argument_transforms import (
     ArgumentTransformError,
     select_effective_arguments,
@@ -28,13 +32,7 @@ from argentgob.module_b.argument_transforms import (
 from argentgob.module_b.sanitizer import Sanitizer
 from argentgob.module_c.abac_evaluator import ABACEvaluator
 from argentgob.module_c.guardrails import GuardrailEngine
-from argentgob.hitl.errors import HitlError
 from argentgob.observability.logger import get_logger
-
-# Fase 4 — Integración operacional: capa predictiva.
-from argentgob.analytics.features import FeatureBuilder
-from argentgob.analytics.predictor import RiskPredictor
-from argentgob.analytics.store import PredictionStore
 
 log = get_logger(__name__)
 
@@ -341,16 +339,23 @@ class GovernanceMiddleware:
             reason=decision.reason_code.value,
             decision_id=decision.decision_id,
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(
             seconds=self.settings.approval_ttl_seconds
         )
         idempotency_key = f"hitl:{envelope.event_id}"
         argument_digest = _argument_digest(envelope.execution_arguments)
 
+        # Persistir la decisión (round-trip H5) ANTES de crear la approval:
+        # `approval_requests.event_id` tiene FK a `policy_decisions.event_id`, y
+        # en PostgreSQL real la fila de la decisión debe existir primero.
+        self.audit.record_decision(
+            envelope, decision, latency_pre_ms=latency_pre_ms
+        )
+
         if self.approval_service is not None and self.hold is not None:
             try:
-                approval, token_id, token_plan = (
+                approval, token_id, _token_plan = (
                     self.approval_service.create_pending_and_issue_token(
                         event_id=envelope.event_id,
                         decision_id=decision.decision_id,
@@ -381,9 +386,6 @@ class GovernanceMiddleware:
                     tool=envelope.tool_name,
                     error=str(exc),
                 )
-        self.audit.record_decision(
-            envelope, decision, latency_pre_ms=latency_pre_ms
-        )
         raise HookAborted(
             reason=f"blocked:{ReasonCode.HUMAN_APPROVAL_REQUIRED.value}",
             source="argentgob.pep",

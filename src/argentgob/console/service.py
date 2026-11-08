@@ -12,14 +12,14 @@ MÃ©tricas:
 - Approvals PENDING y vencidas.
 - Estado de la cadena de auditorÃ­a (Ã­ntegra / motivo sanitizado).
 """
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from psycopg.rows import dict_row
 
 from argentgob.audit.verify import AuditChainVerifier
 from argentgob.db.connection import get_connection
 from argentgob.observability.logger import get_logger
-
 
 log = get_logger(__name__)
 
@@ -105,11 +105,34 @@ class ConsoleQueryService:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(sql, params)
                 rows = cur.fetchall()
-                return [self._row_to_dict(r) for r in rows]
+                return self._parse_json_rows(
+                    [self._row_to_dict(r) for r in rows]
+                )
         finally:
             conn.close()
 
-    # â”€â”€ MÃ©tricas agregadas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Las columnas JSON de `policy_decisions` viajan como Text desde la vista
+    # (v_governance_console); el contrato de la API los expone como listas.
+    _JSON_COLUMNS = (
+        "reason_codes",
+        "matched_policy_ids",
+        "conflicts",
+        "obligations",
+    )
+
+    def _parse_json_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        import json
+
+        for row in rows:
+            for col in self._JSON_COLUMNS:
+                value = row.get(col)
+                if isinstance(value, str):
+                    try:
+                        row[col] = json.loads(value)
+                    except (TypeError, ValueError):
+                        row[col] = []
+        return rows
+
     def metrics(self) -> dict[str, Any]:
         """MÃ©tricas agregadas: conteos por acciÃ³n, percentiles y errores."""
         conn = self._connection_factory()

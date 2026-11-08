@@ -33,7 +33,7 @@ hito sin leer su gate.**
   y Fases 1–6 de la capa predictiva (definición analítica, corpus sintético,
   modelado, integración operacional, interfaz y evidencia académica, tests de
   integración de flujos agénticos).
-- **Suite de pruebas:** **305 passed + 7 skipped** (unit + integración; los 7 skipped son de PostgreSQL real sin `TEST_DATABASE_URL`), los cinco sesgos de la Fase 6 quedaron cerrados (`docs/analytics/0004`), el monitoreo de deriva quedó implementado (`docs/sessions/0018`) y las políticas declarativas YAML son la fuente única (`docs/sessions/0019`).
+- **Suite de pruebas:** **312 passed + 7 skipped** (unit + integración; los 7 skipped son de PostgreSQL real sin `TEST_DATABASE_URL`), los cinco sesgos de la Fase 6 quedaron cerrados (`docs/analytics/0004`), el monitoreo de deriva quedó implementado (`docs/sessions/0018`), las políticas declarativas YAML son la fuente única (`docs/sessions/0019`) y la demo end-to-end de 5 escenarios quedó implementada (`docs/sessions/0020`).
 - **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
 - **Dashboard:** Streamlit con KPIs, decisiones, eventos, distribución por
   herramienta, sección H8 (consola sanitizada + resolución autorizada) y
@@ -142,7 +142,7 @@ $src = (Get-Location).Path
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/ -q -p no:cacheprovider
 ```
 
-> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **305 passed + 7 skipped** (297 + 8 nuevos de políticas declarativas/deriva; PG real se salta sin `TEST_DATABASE_URL`).
+> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **312 passed + 7 skipped** (305 + 7 nuevos de la demo end-to-end; PG real se salta sin `TEST_DATABASE_URL`).
 
 ### 4.3 Tests de integración
 
@@ -194,8 +194,20 @@ paso no aplica.
     python scripts/e2e_fase5_evidence.py
   ```
   Resultado esperado: `===== E2E FASE 5: 19 passed, 0 failed =====`.
-- **Stack (health checks):** `./scripts/verify_stack.sh` (llama-server,
-  dashboard, postgres).
+  - **Demo end-to-end (5 escenarios):**
+    ```powershell
+    podman run --rm `
+      -e "DATABASE_URL=******postgres:5432/argentgob" `
+      -e "ENVIRONMENT=LOCAL" -e "LOG_LEVEL=INFO" `
+      -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+      python scripts/demo_end_to_end.py [--real]
+    ```
+    Sin `--real` corre 100% en memoria (sin red ni LLM); con `--real` persiste en
+    PostgreSQL. Resultado esperado: 5 escenarios con outcomes `OK`, `BLOCK`
+    (`PREDICTED_HIGH_RISK`, `INJECTION_PATTERN_DETECTED`,
+    `SENSITIVITY_EXCEEDED`) y `HITL COMPLETO` (approved → resume → ejecución).
+  - **Stack (health checks):** `./scripts/verify_stack.sh` (llama-server,
+    dashboard, postgres).
 - **Agente E2E (análisis de empresa):**
   ```powershell
   podman run --rm --network argentgob-mvp_default `

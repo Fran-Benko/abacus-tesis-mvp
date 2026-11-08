@@ -69,6 +69,33 @@ Las pruebas unitarias e integración **no requieren** PostgreSQL: el `AuditWrite
 y el acceso a la base se reemplazan por mocks, y el evaluador ABAC usa las
 políticas in-memory del perfil como *fallback* seguro.
 
+## Demo end-to-end (gobernanza de principio a fin)
+
+Ejecuta 5 escenarios sobre los componentes reales del middleware (PEP, policy
+engine, guardrails, HITL, orquestación gobernada) con logs estructurados:
+
+1. **Consulta benigna** → PASS (la tool ejecuta y se audita).
+2. **Predicción HIGH** → BLOCK (`PREDICTED_HIGH_RISK`, la tool no ejecuta).
+3. **Inyección SQL** → BLOCK (`INJECTION_PATTERN_DETECTED`).
+4. **Sensibilidad declarativa** → BLOCK (`SENSITIVITY_EXCEEDED`, política YAML
+   con `sensitivity_limit`).
+5. **HITL completo** → approval → resolución de auditor → resume (token 1-uso)
+   → ejecución gobernada exactamente una vez.
+
+```bash
+# En memoria (reproducible, sin red ni LLM)
+docker run --rm -v "${PWD}:/app" -w /app \
+  -e DATABASE_URL="$DATABASE_URL" -e ENVIRONMENT=LOCAL -e LOG_LEVEL=INFO \
+  --network bridge --entrypoint python argentgob-mvp-agent:latest \
+  scripts/demo_end_to_end.py
+
+# Persistiendo en PostgreSQL
+docker run --rm -v "${PWD}:/app" -w /app \
+  -e DATABASE_URL="$DATABASE_URL" -e ENVIRONMENT=LOCAL -e LOG_LEVEL=INFO \
+  --network bridge --entrypoint python argentgob-mvp-agent:latest \
+  scripts/demo_end_to_end.py --real
+```
+
 ## Invariantes clave
 
 - **INV-01** — la herramienta nunca se ejecuta antes de una decisión válida.

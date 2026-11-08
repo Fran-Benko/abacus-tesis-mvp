@@ -432,6 +432,17 @@ correcto, reflejado en dashboard y auditoría. Suite completa: **259 passed**
   UPSERT + pruning de huérfanas, expansión de comodín `*` por perfil, y
   `sensitivity_limit` ejercido por el evaluador (BLOCK con
   SENSITIVITY_EXCEEDED cuando la predicción supera el límite declarado).
+- ✅ Demo end-to-end de 5 escenarios (`0020`): `scripts/demo_end_to_end.py`
+  + `scripts/demo_lib.py` sobre los componentes reales (middleware, policy
+  engine, guardrails, HITL, orquestación gobernada), en memoria o con `--real`
+  (PostgreSQL). Muestra PASS/BLOCK por predicción, guardrail de inyección,
+  sensibilidad declarativa (SENSITIVITY_EXCEEDED) y el flujo HITL completo
+  (approval → resolución de auditor → resume 1-uso → ejecución gobernada).
+  La demo `--real` expuso y corrigió un bug latente: `policy_decisions`
+  (tabla con FK de approval/execution/audit) nunca se insertaba en runtime;
+  `AuditWriter.record_decision` ahora persiste el round-trip H5 en ambas
+  tablas y `_elevate_hitl` persiste la decisión antes de crear la approval.
+  `tests/unit/test_demo_end_to_end.py` (7 tests).
 - Mejorar visualizaciones históricas.
 - Detector PII probabilístico.
 
