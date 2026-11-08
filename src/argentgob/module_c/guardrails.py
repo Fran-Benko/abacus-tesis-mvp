@@ -78,6 +78,11 @@ class GuardrailEngine:
         """Reinicia el contador de llamadas (usar entre corridas)."""
         self._call_count = 0
 
+    @property
+    def rate_limit_consumption(self) -> int:
+        """Consumo actual del rate-limit (llamadas contadas en esta corrida)."""
+        return self._call_count
+
 
 _GUARD_REGISTRY = {
     "query_injection": GuardrailEngine._query_injection_guard,

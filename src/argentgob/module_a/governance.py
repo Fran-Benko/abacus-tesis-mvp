@@ -154,7 +154,7 @@ class GovernanceMiddleware:
         #    motor determinista (fallback fail-closed).
         self._run_predictive_inference(envelope, started)
 
-        # 6. Evaluar pol?tica ABAC (M?dulo C).
+        # 7. Evaluar pol?tica ABAC (M?dulo C).
         decision = self.abac.evaluate(envelope)
         envelope.decision = decision
 
@@ -232,7 +232,7 @@ class GovernanceMiddleware:
                 started,
             )
 
-# 7. Ejecutar guardrails del dominio (Módulo C).
+# 8. Ejecutar guardrails del dominio (Módulo C).
         for guard_name, passed, guard_reason in self.guardrails.run_all(envelope):
             if not passed:
                 latency_pre_ms = (time.perf_counter() - started) * 1000
@@ -263,7 +263,7 @@ class GovernanceMiddleware:
                 tool=tool_name,
             )
 
-        # 6. Registrar la decisión PASS.
+        # 9. Registrar la decisión PASS.
         latency_pre_ms = (time.perf_counter() - started) * 1000
         log.info(
             "policy_pass",
@@ -288,12 +288,22 @@ class GovernanceMiddleware:
         predicción. NO lanza excepciones: cualquier error degrada a fallback
         (decide el motor determinista).
         """
-        if self.risk_predictor is None or not self.risk_predictor.available:
+        if self.risk_predictor is None:
+            return
+        if not self.risk_predictor.available:
+            # INV-11 fail-closed informado: sin modelo, decide el motor
+            # determinista. No es un error de enforcement (el fallback es la
+            # garantía), pero se registra para trazabilidad operacional.
+            log.info(
+                "predictive_unavailable_fallback",
+                evento="🔮 PREDICCIÓN NO DISPONIBLE (fallback determinista)",
+                tool=envelope.tool_name,
+            )
             return
         try:
             builder = self.feature_builder or FeatureBuilder(
                 policy_source=getattr(self.abac, "policy_source", None),
-                rate_limit_consumption=self.guardrails._call_count,
+                rate_limit_consumption=self.guardrails.rate_limit_consumption,
             )
             features = builder.build(envelope)
             prediction = self.risk_predictor.predict(features)
@@ -352,6 +362,10 @@ class GovernanceMiddleware:
         self.audit.record_decision(
             envelope, decision, latency_pre_ms=latency_pre_ms
         )
+        # Registrar en el índice de decisiones para que un eventual post_hook
+        # (camino de excepción no-HookAborted) pueda vincular su resultado con
+        # la decisión HITL persistida (misma convención que el camino PASS).
+        self._decision_index[envelope.event_id] = decision.decision_id
 
         if self.approval_service is not None and self.hold is not None:
             try:
@@ -477,7 +491,7 @@ class GovernanceMiddleware:
                 expires_at=expires_at,
             )
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - el hold falla cerrado: se loguea y no se emite token
             log.warning(
                 "policy_hitl_hold_error",
                 evento="? HITL REQUIRED (hold falló)",

@@ -160,38 +160,60 @@ def _wiring(store: DemoStore, settings: Settings) -> dict[str, Any]:
 
 
 def _con_prediccion(mw, clase: str):
-    """Fuerza la predicción del predictor real a `clase` durante el contexto.
+    """Fuerza la predicción del predictor a `clase` durante el contexto.
 
-    El predictor del middleware es compartido entre escenarios; este context
-    manager restaura `predict` al salir para que un escenario no contamine al
-    siguiente (cada escenario es una ejecución independiente del PEP).
+    Funciona aunque el modelo no esté disponible (p.ej. sin `sklearn` en el
+    entorno local): se reemplaza temporalmente `mw.risk_predictor` por un stub
+    con `available=True` que devuelve siempre la clase forzada. Al salir del
+    contexto se restaura el predictor original para que un escenario no
+    contamine al siguiente.
+
+    El stub respeta el contrato de `RiskPredictor`: `available`, `predict`,
+    `predict_proba`, `model_id`, `model_version`, `feature_schema_version`.
     """
     import contextlib
 
     predictor = mw.risk_predictor
-    real_predict = predictor.predict
+    original = predictor
 
-    def forced(features):
-        pred = real_predict(features)
-        if pred is None:
-            return None
-        return RiskPrediction(
-            predicted_risk_class=clase,
-            risk_probability=getattr(pred, "risk_probability", 0.5),
-            class_probabilities=getattr(pred, "class_probabilities", {}),
-            model_id=getattr(pred, "model_id", "risk_model_v1"),
-            model_version=getattr(pred, "model_version", "v1"),
-            feature_schema_version=getattr(pred, "feature_schema_version", "v1"),
-            inference_latency_ms=getattr(pred, "inference_latency_ms", 0.0),
-        )
+    class _StubPredictor:
+        available = True
+
+        def predict(self, features):
+            probs = {"LOW": 0.05, "MEDIUM": 0.2, "HIGH": 0.75}
+            return RiskPrediction(
+                predicted_risk_class=clase,
+                risk_probability=probs[clase],
+                class_probabilities=probs,
+                model_id="risk_model_v1",
+                model_version="v1",
+                feature_schema_version="v1",
+                inference_latency_ms=0.0,
+            )
+
+        def predict_proba(self, features):
+            probs = {"LOW": 0.05, "MEDIUM": 0.2, "HIGH": 0.75}
+            return [probs["LOW"], probs["MEDIUM"], probs["HIGH"]]
+
+        @property
+        def model_id(self):
+            return "risk_model_v1"
+
+        @property
+        def model_version(self):
+            return "v1"
+
+        @property
+        def feature_schema_version(self):
+            return "v1"
 
     @contextlib.contextmanager
     def _cm():
-        predictor.predict = forced  # type: ignore[method-assign]
+        mw.risk_predictor = _StubPredictor()  # type: ignore[assignment]
         try:
             yield
         finally:
-            predictor.predict = real_predict  # type: ignore[method-assign]
+            mw.risk_predictor = original  # type: ignore[assignment]
 
     return _cm()
 
