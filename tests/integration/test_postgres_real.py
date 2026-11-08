@@ -42,6 +42,12 @@ def _native_url() -> str:
     return normalize_db_url(TEST_DATABASE_URL)
 
 
+def _pg_factory():
+    import psycopg as _psycopg
+
+    return _psycopg.connect(_native_url(), autocommit=True)
+
+
 @pytest.fixture
 def pg_conn():
     """Conexion real a la DB de prueba (autocommit)."""
@@ -322,7 +328,36 @@ def test_model_drift_reports_grants_y_insert(pg_conn):
     assert abs(row[0] - 0.05) < 1e-6
 
 
-def _pg_factory():
-    import psycopg as _psycopg
+    @requires_pg
+    def test_seed_declarativo_persiste_en_pg_real(pg_conn):
+        """El seed desde YAML inserta governance_policies con grants mínimos."""
+        from scripts.seed_policies import seed
 
-    return _psycopg.connect(_native_url(), autocommit=True)
+        # El seed corre como argentgob_app (owner) contra la DB de test.
+        inserted = seed(environment="TEST", connection_factory=_pg_factory)
+        assert inserted >= 6, f"se esperaban al menos 6 políticas, got {inserted}"
+
+        with pg_conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM governance_policies WHERE environment = 'TEST'"
+            )
+            total = cur.fetchone()[0]
+        assert total >= 6
+
+        # Grants: la app escribe; consola solo SELECT.
+        with pg_conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT grantee, privilege_type
+                FROM information_schema.role_table_grants
+                WHERE table_name = 'governance_policies'
+                """
+            )
+            grants: dict[str, set[str]] = {}
+            for grantee, priv in cur.fetchall():
+                grants.setdefault(grantee, set()).add(priv)
+        app_privs = grants.get("argentgob_app", set())
+        assert {"SELECT", "INSERT"}.issubset(app_privs)
+        for role in ("argentgob_auditor", "argentgob_viewer", "argentgob_operator"):
+            if role in grants:
+                assert grants[role] == {"SELECT"}, f"{role} deberia solo SELECT"

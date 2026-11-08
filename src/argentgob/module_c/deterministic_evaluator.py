@@ -152,6 +152,31 @@ class DeterministicEvaluator:
         )
         best = sorted_pass[0]
 
+        # Política declarativa — sensitivity_limit (hito políticas declarativas).
+        # Si la política declara una sensibilidad máxima y la predicción del
+        # modelo la supera, la decisión es BLOCK con SENSITIVITY_EXCEEDED
+        # (reason code más específico que PREDICTED_HIGH_RISK genérico).
+        limit = best.policy.sensitivity_limit
+        predicted_class = getattr(
+            getattr(envelope, "prediction", None), "predicted_risk_class", None
+        )
+        if (
+            limit is not None
+            and predicted_class is not None
+            and DeterministicEvaluator._risk_rank(predicted_class)
+            > DeterministicEvaluator._risk_rank(limit)
+        ):
+            return PolicyDecision(
+                action=GovernanceAction.BLOCK,
+                reason_codes=[ReasonCode.SENSITIVITY_EXCEEDED],
+                risk_level=self._risk_for(envelope.operation_class),
+                policy_id=best.policy.policy_id,
+                policy_version=best.policy.policy_version,
+                policy_digest=best.policy.policy_digest,
+                matched_policy_ids=[m.policy.policy_id for m in matches],
+                effective_priority=best.policy.priority,
+            )
+
         # Verificar conflictos de obligaciones entre políticas PASS que coinciden.
         conflicts = self._detect_conflicts(sorted_pass)
         obligations = best.policy.obligations
@@ -248,3 +273,9 @@ class DeterministicEvaluator:
     @staticmethod
     def _risk_for(operation_class: str) -> RiskLevel:
         return _RISK_FROM_OPERATION.get(operation_class, RiskLevel.LOW)
+
+    @staticmethod
+    def _risk_rank(level: str | RiskLevel) -> int:
+        """Orden de severidad para comparar sensitivity_limit con la predicción."""
+        value = level.value if isinstance(level, RiskLevel) else str(level)
+        return {"LOW": 1, "MEDIUM": 2, "HIGH": 3}.get(value.upper(), 0)

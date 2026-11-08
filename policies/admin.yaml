@@ -5,3 +5,5 @@ policies:
     operation_class: "*"
     effect: "ALLOW"
     priority: 10
+    sensitivity_limit: "HIGH"
+    obligations: ["USE_ORIGINAL_ARGUMENTS"]

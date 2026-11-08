@@ -5,13 +5,17 @@ policies:
     operation_class: "EXTERNAL_SEND"
     effect: "ALLOW"
     priority: 50
+    sensitivity_limit: "MEDIUM"
+    obligations: ["USE_ORIGINAL_ARGUMENTS"]
   - policy_id: "POL-analyst-002"
     tool_name: "stock_price"
     operation_class: "READ"
     effect: "ALLOW"
     priority: 50
+    obligations: ["USE_ORIGINAL_ARGUMENTS"]
   - policy_id: "POL-analyst-003"
     tool_name: "crypto_price"
     operation_class: "READ"
     effect: "ALLOW"
     priority: 50
+    obligations: ["USE_ORIGINAL_ARGUMENTS"]

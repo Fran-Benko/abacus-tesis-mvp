@@ -4,8 +4,8 @@ Implementa un subconjunto del contrato psycopg suficiente para ejecutar los
 servicios reales del flujo de gobernanza HITL end-to-end sin una base de datos
 real: `governance_decisions`, `governance_events`, `risk_predictions`,
 `approval_requests`, `approval_resume_tokens`, `execution_results`,
-`policy_decisions`, `audit_chain`, `model_drift_reports` y las vistas
-`v_governance_console`, `v_approval_console`, `v_risk_evidence`.
+`policy_decisions`, `audit_chain`, `model_drift_reports`, `governance_policies`
+y las vistas `v_governance_console`, `v_approval_console`, `v_risk_evidence`.
 
 Los servicios usan `connection_factory` inyectable, por lo que basta con
 proporcionar una fabrica que devuelva esta conexion en memoria. Cada conexion
@@ -39,6 +39,7 @@ def _new_store() -> dict[str, dict[str, dict[str, Any]]]:
         "policy_decisions": {},
         "audit_chain": {},
         "model_drift_reports": {},
+        "governance_policies": {},
     }
 
 
@@ -125,6 +126,12 @@ class MemConn:
             return self._insert_model_drift_report(params)
         if "FROM MODEL_DRIFT_REPORTS" in upper:
             return self._select_model_drift_reports(sql, params)
+        if "INSERT INTO GOVERNANCE_POLICIES" in upper:
+            return self._insert_governance_policy(params)
+        if "DELETE FROM GOVERNANCE_POLICIES" in upper:
+            return self._delete_governance_policies(params)
+        if "FROM GOVERNANCE_POLICIES" in upper:
+            return self._select_governance_policies(params)
         if "UPDATE APPROVAL_REQUESTS" in upper:
             return self._update_approval_request(params)
         if "UPDATE APPROVAL_RESUME_TOKENS" in upper:
@@ -740,3 +747,31 @@ class MemConn:
         if params.get("limit"):
             rows = rows[: int(params["limit"])]
         return (0, rows)
+
+    def _insert_governance_policy(self, params):
+        """UPSERT sobre (policy_id, policy_version): inserta o actualiza."""
+        key = (params.get("policy_id"), params.get("policy_version"))
+        existing = self.store["governance_policies"].get(key)
+        if existing is None:
+            self.store["governance_policies"][key] = dict(params)
+        else:
+            self.store["governance_policies"][key] = {**existing, **dict(params)}
+        return (1, [])
+
+    def _select_governance_policies(self, params):
+        """Devuelve las políticas vigentes en `now` (como el PolicyStore)."""
+        rows = list(self.store["governance_policies"].values())
+        return (0, rows)
+
+    def _delete_governance_policies(self, params):
+        """DELETE por environment + policy_id (pruning del seed)."""
+        env = params.get("env") or params.get("environment")
+        pid = params.get("pid") or params.get("policy_id")
+        before = len(self.store["governance_policies"])
+        self.store["governance_policies"] = {
+            k: v
+            for k, v in self.store["governance_policies"].items()
+            if v.get("environment") != env or v.get("policy_id") != pid
+        }
+        deleted = before - len(self.store["governance_policies"])
+        return (deleted, [])
