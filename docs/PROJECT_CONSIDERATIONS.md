@@ -98,9 +98,10 @@ podman run --rm --network argentgob-mvp_default `
   python -m alembic current
 ```
 
-Estado actual: migraciones aplicadas hasta `004 (head)` (H8: roles de consola
-`viewer`/`auditor`/`approver`/`admin`, vista `v_approval_console` sanitizada y
-grants).
+Estado actual: migraciones aplicadas hasta `007 (head)` (H8: roles de consola
+`viewer`/`auditor`/`approver`/`admin`, vista `v_approval_console` sanitizada,
+grants; capa predictiva: `risk_predictions` 005, `risk_evidence_view` 006 y
+`model_drift_reports` 007).
 
 ### 3.3.1 Verificación de la cadena de auditoría (H7)
 

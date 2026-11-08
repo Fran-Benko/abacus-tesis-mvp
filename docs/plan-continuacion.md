@@ -13,7 +13,7 @@
 ### 0.1 Estado actual verificado (baseline)
 
 - **Suite de pruebas:** **259 passed** (unit + integración).
-- **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
+- **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → 006 → **007** (head).
 - **Hitos completos:** H1–H8 (intercepción, sanitización, ABAC, guardrails,
   policy engine persistente, HITL, auditoría encadenada, consola sanitizada)
   y Fases 1–5 de la capa predictiva (definición analítica, corpus, modelado,
