@@ -427,7 +427,11 @@ correcto, reflejado en dashboard y auditoría. Suite completa: **259 passed**
 - ✅ Monitoreo de deriva del modelo (`0018`): PSI entre baseline del corpus y
   distribución observada, severidad, persistencia en `model_drift_reports`
   (migración 007) y sección de deriva en el dashboard.
-- Refinar políticas declarativas.
+- ✅ Refinar políticas declarativas (`0019`): YAML como fuente
+  canónica de `governance_policies` (`module_c.yaml_policies`), seed con
+  UPSERT + pruning de huérfanas, expansión de comodín `*` por perfil, y
+  `sensitivity_limit` ejercido por el evaluador (BLOCK con
+  SENSITIVITY_EXCEEDED cuando la predicción supera el límite declarado).
 - Mejorar visualizaciones históricas.
 - Detector PII probabilístico.
 
