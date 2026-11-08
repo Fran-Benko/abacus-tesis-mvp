@@ -23,6 +23,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copiar solo lo necesario para el dashboard
 COPY src/ ./src/
+COPY scripts/ ./scripts/
+COPY policies/ ./policies/
 
 RUN chown -R argentgob:argentgob /app
 

@@ -18,6 +18,7 @@ from argentgob.console.hitl_detail import HitlDetailService
 from argentgob.console.resolution import ResolutionService
 from argentgob.console.service import ConsoleQueryService
 from argentgob.core.config import get_settings
+from argentgob.dashboard import demo_runner
 from argentgob.dashboard.evidence import render_drift_section, render_evidence_section
 from argentgob.hitl.resolver import ApprovalResolver
 from argentgob.identity.provider import AuditorIdentityProvider
@@ -230,6 +231,64 @@ def _render_h8_console():
                     st.error(f"Error resolviendo: {exc}")
 
 
+# ── Demo end-to-end en vivo ────────────────────────────────────────
+def _render_demo_section():
+    """Botones para correr la demo end-to-end y ver los logs en vivo."""
+    st.divider()
+    st.header("🚀 Demo end-to-end en vivo")
+    st.caption(
+        "Ejecuta los 5 escenarios de gobernanza (PASS, BLOCK ×3, HITL) "
+        "persistiendo en PostgreSQL. Los KPIs y tablas de arriba se "
+        "actualizan solos con el refresh automático."
+    )
+
+    c1, c2, c3 = st.columns([1.5, 1.5, 2])
+    with c1:
+        if st.button("▶️ Correr demo (persistir)", key="demo_run", use_container_width=True):
+            ok, msg = demo_runner.start_demo()
+            if ok:
+                st.toast("Demo iniciada: mirá los logs y los KPIs actualizarse.")
+            else:
+                st.warning(msg)
+    with c2:
+        if st.button("🧹 Limpiar log", key="demo_clear", use_container_width=True):
+            demo_runner.limpiar_log()
+    with c3:
+        status = demo_runner.demo_status_snapshot()
+        if status["running"]:
+            st.success(f"⏳ Demo en ejecución desde {status['started_at']}")
+        elif status["done"]:
+            code = status["returncode"]
+            if code == 0:
+                st.success(f"✅ Demo finalizada (exit {code})")
+            else:
+                st.error(f"❌ Demo finalizó con error (exit {code})")
+        else:
+            st.info("Demo inactiva.")
+
+    # Resumen de escenarios (sin payload, INV-05).
+    esc = status["escenarios"]
+    if esc:
+        st.markdown("**Resultado por escenario**")
+        for e in esc:
+            out = e["outcome"]
+            if "HITL" in out or "APPROB" in out:
+                icono = "🕐"
+            elif "BLOCK" in out or "BLOQUEADO" in out:
+                icono = "⛔"
+            else:
+                icono = "✅"
+            st.markdown(f"- {icono} **{e['titulo']}**: {out or '—'}")
+
+    # Log estructurado en streaming (últimas líneas).
+    texto = status["lines"]
+    if texto:
+        st.markdown("**Log en vivo (últimas líneas)**")
+        st.code(texto, language="text", line_numbers=True)
+    elif status["running"]:
+        st.info("El demo está arrancando… los logs aparecen acá.")
+
+
 st.title("🛡️ ArgentGob-Mesh · Governance Dashboard")
 st.caption(
     f"Actualización automática cada {REFRESH_SECS} s · Sin raw payload · INV-05"
@@ -301,6 +360,9 @@ try:
 
     # ── Hito prioridad media: monitoreo de deriva del modelo ─────────
     render_drift_section()
+
+    # ── Demo end-to-end en vivo (botones + logs + KPIs) ─────────────
+    _render_demo_section()
 
 except Exception as exc:  # noqa: BLE001 - mostrar error de conexión en la UI
     st.error(f"Error conectando a la base de datos: {exc}")
