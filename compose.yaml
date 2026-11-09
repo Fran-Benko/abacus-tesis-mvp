@@ -101,7 +101,7 @@ services:
     build:
       context: .
       dockerfile: containers/dashboard.Containerfile
-    command: ["streamlit", "run", "src/argentgob/dashboard/app.py",
+    command: ["streamlit", "run", "src/argentgob/dashboard/dashboard.py",
               "--server.port=8501", "--server.address=0.0.0.0"]
     env_file: .env
     environment:

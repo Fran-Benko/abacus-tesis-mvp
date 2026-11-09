@@ -1,0 +1,24 @@
+# ArgentGob-Mesh · Dashboard — Tema activo (Claro editorial, default)
+# Variante oscura: cambiar base="dark", backgroundColor="#111214",
+# secondaryBackgroundColor="#17181B", textColor="#ECECEA", primaryColor="#6C8EF5"
+# y los colores de estado de la sección 6.3 del prompt v4.
+
+[theme]
+base = "light"
+primaryColor = "#1D4ED8"
+backgroundColor = "#FAFAF8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1A1D21"
+font = "Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+
+# Semántica de estados (paleta básica consumida por st.metric y st.badge)
+greenColor = "#22C55E"
+redColor = "#F87171"
+yellowColor = "#FBBF24"
+blueColor = "#38BDF8"
+
+# Paleta categórica de gráficos (st.echarts_chart theme="streamlit")
+chartCategoricalColors = ["#22C55E", "#F87171", "#FBBF24", "#38BDF8", "#94A3B8"]
+
+[client]
+toolbarMode = "minimal"
