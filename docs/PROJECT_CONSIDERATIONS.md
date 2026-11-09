@@ -67,6 +67,11 @@ Grep de los resumenes para conocer el baseline histórico:
 baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 = 126
 → H7 +24 unit = 150 → H8 +42 = **192 passed** (unit).
 
+> **Cifra oficial actual (verificada, sesión de cierre de brechas):** la suite
+> completa `pytest tests/` reporta **334 passed + 9 skipped** (shellId 239,
+> 2026-11-09). Los 9 skipped son por ausencia de `TEST_DATABASE_URL` /
+> `DATABASE_URL` (ver §7 Límites).
+
 ### 3.2 Tests de integración
 
 El runner es el mismo pero apuntando a `tests/integration`:
@@ -75,7 +80,11 @@ El runner es el mismo pero apuntando a `tests/integration`:
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/integration -q -p no:cacheprovider
 ```
 
-Actualmente: **11 passed** (6 baseline + 5 H7).
+Actualmente: **60 passed + 7 skipped** (6 baseline R5 + 5 H7 + 5 H8 + 6 Fase 6
+agentic flows + 8 perfiles/CrewAI + 2 concurrencia + 6 HITL E2E + 10 deriva +
+8 políticas declarativas + 1 demo + 5 dashboard + 6 dashboard demo runner +
+5 dashboard charts + 17 design system + …; los 7 skipped son `test_postgres_real`
+sin `TEST_DATABASE_URL`).
 
 ### 3.3 Migraciones (Alembic)
 
@@ -249,7 +258,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
   propios, merge a `main` en `d74376f`).
 - H6 — Aprobación humana durable y ejecución gobernada: **completo** (paquete
   `src/argentgob/hitl/`, hook HITL durable en el PEP, crew con
-  `DeterministicEvaluator`/`PolicyStore` + servcios HITL, 24 tests propios →
+  `DeterministicEvaluator`/`PolicyStore` + servicios HITL, 24 tests propios →
   baseline 126 passed). Merge a `main` en `0bbe158`.
 - H7 — Auditoría detectable ante manipulación: **completo** (paquete
   `src/argentgob/audit/` con `canonical`/`append`/`verify`/`cli`, migración 003
@@ -260,6 +269,191 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
   + vista `v_approval_console`, extensión del dashboard Streamlit con la consola
   H8, 42 tests nuevos → baseline **203 passed** (192 unit + 11 integración)).
   E2E `scripts/e2e_h8_console.py`: 23/23 checks OK contra la DB real. Merge a
-  `main` pendiente.
-- Próximo hito según plan: **H9** (ver resúmenes de sesión para análisis
-  detallado).
+  `main` en `e923f8d`.
+- Capa predictiva (H12–H16, Fases 1–6 del [plan de continuación](plan-continuacion.md)):
+  **completo** — corpus sintético `corpus_v1` (3000 escenarios, seed 42),
+  modelo `risk_model_v1` (regresión logística calibrada, Macro F1 0.9985,
+  Recall HIGH 1.0), integración en el `pre_hook` del PEP con precedencia
+  `BLOCK > HIGH(BLOCK) > MEDIUM(HITL) > LOW > fallback fail-closed`, persistencia
+  `risk_predictions`/`risk_model_versions` (migración 005) y vista
+  `v_risk_evidence` (006). E2E Fase 4: 6/6, Fase 5: 19/19.
+- Prioridad alta del hito: **completo** — criterios de aceptación H1–H4/H8–H11
+  (formato 3 Cs en `modulo2-entrega.md` §3.2), HITL verificado end-to-end
+  (`tests/integration/test_hitl_end_to_end.py`: predicción MEDIUM → approval →
+  resolución → resume → ejecución gobernada; demo `scripts/demo_end_to_end.py`
+  escenario 5), tests de PostgreSQL real (`test_postgres_real.py`, se salta sin
+  `TEST_DATABASE_URL`), concurrencia y CrewAI real.
+- Prioridad media: **completo** — monitoreo de deriva (PSI, migración 007
+  `model_drift_reports`, sección "Salud del Modelo" del dashboard); políticas
+  declarativas YAML como fuente canónica (`policies/*.yaml` → seed con UPSERT +
+  pruning, `sensitivity_limit` ejercido, comodín `*`); demo end-to-end de 5
+  escenarios (`scripts/demo_end_to_end.py`, reproducible en memoria o
+  PostgreSQL).
+- Rediseño UX/UI del dashboard (prompt v4): **completo** — 5 vistas
+  multipágina (`st.navigation` + `st.Page`), design system (`.streamlit/config.toml`,
+  `palette.py`, `charts.py` con ECharts puros, `queries.py`, `components.py`),
+  KPIs neutros, heatmap Predicción×Decisión, matriz de confusión y curva de
+  calibración, demo ejecutable desde la UI. Suite completa **334 passed + 9
+  skipped**. Merge a `main` en `e923f8d`.
+- Estado del repositorio: ver §8 (Relevamiento del repositorio).
+- Próximo hito: **ninguno pendiente de desarrollo en el plan vigente**; el
+  trabajo restante es de consolidación documental de la tesis (ver §7 Límites).
+
+---
+
+## 7. Límites declarados del prototipo
+
+> Sección solicitada en el cierre de brechas para dejar explícitos los límites
+> metodológicos y operacionales del MVP, de modo que la documentación de la
+> tesis no presente el prototipo como si validara más de lo que valida.
+
+### 7.1 Corpus sintético y validez externa del modelo predictivo
+
+- El corpus `corpus_v1` (3000 escenarios, seed 42) es **100 % sintético**,
+  generado por reglas (`scripts/build_synthetic_corpus.py`); no contiene PII
+  real (validado: `validation_report.json`).
+- Las métricas del modelo (`risk_model_v1`, regresión logística calibrada) son
+  **casi perfectas** (Macro F1 0.9985, Recall HIGH 1.0) precisamente porque el
+  modelo aprende la rúbrica de etiquetado del corpus sintético.
+- **Advertencia metodológica (validez externa):** el desempeño sobre tráfico
+  real etiquetado por humanos **no está demostrado**; requiere un corpus real
+  para afirmar generalización. Esto queda como trabajo futuro (ver
+  `docs/analytics/0003-arquitectura-y-evidencia.md` §5).
+- Los tests de software (unit + integración) y los E2E **no sustituyen** la
+  evaluación analítica/predictiva: son tres tipos de evidencia distintos y así
+  deben presentarse en la tesis (tests de software / métricas analíticas de
+  detectores / métricas predictivas del modelo).
+
+### 7.2 HITL verificado con fixtures, no con auditor humano real
+
+- El flujo HITL end-to-end está verificado mediante **fixtures y componentes
+  reales** (predicción MEDIUM → approval PENDING → token de reanudación 1-uso →
+  resolución APPROVED → resume → ejecución gobernada), en
+  `tests/integration/test_hitl_end_to_end.py` y en el escenario 5 de
+  `scripts/demo_end_to_end.py`.
+- **No** se realizó una corrida con un **auditor humano real** operando la
+  consola en producción. La resolución autorizada está validada con identidad y
+  evidencia (H8), pero la operación con personas queda como validación
+  operacional.
+- La tasa de HITL originada por predicción depende de la distribución de
+  tráfico real (no hay datos de producción).
+
+### 7.3 Tests skipped por falta de `TEST_DATABASE_URL` / `DATABASE_URL`
+
+- La suite completa reporta **334 passed + 9 skipped**. Los **9 skipped** son
+  exactamente:
+  - `tests/integration/test_postgres_real.py` (7): validan migraciones en head,
+    constraints UNIQUE/CHECK, grants mínimos de roles de consola y flujo real
+    LOW→PASS contra una base PostgreSQL de **prueba**; se saltan cuando
+    `TEST_DATABASE_URL` no está definida.
+  - `tests/unit/test_dashboard_apptest.py` (2): cargan el dashboard Streamlit
+    (AppTest) contra la base; se saltan sin `DATABASE_URL` (stack PostgreSQL).
+- Para acreditarlos en una corrida de cierre:
+  ```powershell
+  podman run --rm -e "TEST_DATABASE_URL=******postgres:5432/argentgob_test" `
+    -v "${PWD}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+    pytest tests/integration/test_postgres_real.py -q -p no:cacheprovider
+  ```
+- Los E2E contra PostgreSQL real (`e2e_h8_console`, `e2e_fase4_predictive`,
+  `e2e_fase5_evidence`) sí requieren el stack levantado y la red
+  `argentgob-mvp_default`.
+
+### 7.4 Otros límites declarados
+
+- **Cadena de auditoría tamper-evident, no inmutable:** sin checkpoint externo
+  no se garantiza la detección de una reescritura completa o truncado final
+  coherente por owner/superusuario (ver §3.3.1).
+- **Detector PII:** sanitización y guardrails son **deterministas** (regex);
+  no existe "reconocimiento probabilístico" de PII. El detector probabilístico
+  de PII está fuera de alcance (backlog).
+- **Modelo GGUF:** `Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf` (~4.9 GB) solo
+  existe en el worktree raíz (`main`); otros worktrees con `models/` vacío
+  hacen crash-loop en `llama-server` (ver §2).
+
+---
+
+## 8. Relevamiento del repositorio (estado verificado)
+
+> Sección solicitada en el cierre de brechas: resumen del estado del
+> repositorio verificado al 2026-11-09 (sesión de cierre de brechas, HEAD
+> `e923f8d` en `main`, árbol limpio).
+
+### 8.1 Funcionalidades (H1–H16)
+
+| ID | Funcionalidad | Estado | Evidencia |
+|---|---|---|---|
+| H1 | Envelope canónico de tool call | ✅ Implementada y verificada | `src/argentgob/core/envelope.py`, INV-01/INV-15 |
+| H2 | Sanitización de PII y truncado (regex deterministas) | ✅ Implementada y verificada | `src/argentgob/module_b/sanitizer.py`, INV-04/INV-05 |
+| H3 | Evaluación ABAC por perfil con fallback in-memory | ✅ Implementada y verificada | `src/argentgob/module_c/abac_evaluator.py` |
+| H4 | Guardrails de dominio (inyección, relevancia, rate limit) | ✅ Implementada y verificada | `src/argentgob/module_c/guardrails.py` |
+| H5 | Policy engine persistente (versión, matching, precedencia) | ✅ Implementada y verificada | migración 002, `PolicyStore`, `policy_decisions` |
+| H6 | Aprobación humana HITL (durable, tokens 1-uso) | ✅ Implementada y verificada E2E (fixtures) | `src/argentgob/hitl/`, `test_hitl_end_to_end.py`, demo escenario 5 |
+| H7 | Auditoría encadenada tamper-evident + verificador | ✅ Implementada y verificada | migración 003, `src/argentgob/audit/`, CLI exit 0/1/2 |
+| H8 | Consola sanitizada y resolución autorizada | ✅ Implementada y verificada | migración 004, `src/argentgob/console/` + `identity/`, E2E 23/23 |
+| H9 | Integración con CrewAI (GovernedTool) | ✅ Implementada y verificada | `src/argentgob/module_a/governed_tool.py`, `test_crewai_real.py` |
+| H10 | Dashboard de monitoreo (5 vistas, ECharts, auto-refresh) | ✅ Implementada y verificada | `src/argentgob/dashboard/`, AppTest, browser |
+| H11 | Suite de tests unitarios e integración | ✅ Implementada (**334 passed + 9 skipped**) | `pytest tests/` (verificado 2026-11-09) |
+| H12 | Corpus predictivo versionado (sintético) | ✅ Implementada y verificada | `data/corpus/corpus_v1.parquet` + `corpus_manifest.json` (seed 42, hash congelado), `validate_corpus.py` OK |
+| H13 | Preparación de features (27, pre-ejecución, anti-leakage) | ✅ Implementada y verificada | `src/argentgob/analytics/features.py` (FeatureBuilder) |
+| H14 | Entrenamiento/calibración/evaluación del modelo | ✅ Implementada y verificada | `scripts/train_risk_model.py`, `data/models/risk_model_v1/` (pipeline.joblib, thresholds.json, metrics) |
+| H15 | Inferencia de riesgo pre-ejecución + persistencia | ✅ Implementada y verificada | `src/argentgob/analytics/predictor.py` + `store.py`, migración 005, E2E Fase 4 6/6 |
+| H16 | Integración con PASS/BLOCK/HITL + dashboard + evidencia | ✅ Implementada y verificada | `v_risk_evidence` (migración 006), dashboard "Inteligencia Predictiva", E2E Fase 5 19/19 |
+
+### 8.2 Migraciones aplicadas
+
+`001 → 002 → 003 → 004 → 005 → 006 → 007 (head)` — verificable con
+`python -m alembic current` (`007 (head)`).
+
+| Migración | Contenido |
+|---|---|
+| 001 | Schema inicial R0 (`governance_policies`, `governance_decisions`, `governance_events`) |
+| 002 | Policy engine H5 + HITL H6 (`policy_decisions`, `execution_results`, `approval_requests`, `approval_resume_tokens`) |
+| 003 | Auditoría H7 (`audit_chain` + trigger append-only + owner dedicado) |
+| 004 | Consola H8 (roles `viewer`/`auditor`/`approver`/`admin`, vista `v_approval_console`) |
+| 005 | Capa predictiva Fase 4 (`risk_model_versions`, `risk_predictions`) |
+| 006 | Vista `v_risk_evidence` (Fase 5, 17 columnas sanitizadas) |
+| 007 | Monitoreo de deriva (`model_drift_reports`, PSI) |
+
+### 8.3 Verificaciones (E2E y suite ejecutadas en el cierre de brechas)
+
+| Verificación | Resultado |
+|---|---|
+| `pytest tests/` (suite completa, imagen reconstruida) | **334 passed + 9 skipped** |
+| E2E H8 (`scripts/e2e_h8_console.py`) | 23/23 checks OK |
+| E2E Fase 4 (`scripts/e2e_fase4_predictive.py`) | 6/6 checks OK |
+| E2E Fase 5 (`scripts/e2e_fase5_evidence.py`) | 19/19 checks OK |
+| Demo end-to-end (`scripts/demo_end_to_end.py`, 5 escenarios) | OK / BLOCK (`PREDICTED_HIGH_RISK`, `INJECTION_PATTERN_DETECTED`, `SENSITIVITY_EXCEEDED`) / HITL COMPLETO |
+| `python -m argentgob.audit.cli` | `OK: la cadena de auditoría es íntegra.` |
+
+### 8.4 Árbol del repositorio y ramas
+
+- Rama activa: `main` (worktree raíz `plan-implementacion-avancemos`, con el
+  modelo GGUF). HEAD `e923f8d` (rediseño UX/UI v4), árbol limpio.
+- Branches de trabajo históricas (`agents/*`) en
+  `abacus-tesis-mvp.worktrees/` — todas ya mergeadas a `main` (ver §4).
+- Artefactos versionados: `data/corpus/` (corpus + manifiesto + reporte),
+  `data/models/risk_model_v1/` (pipeline, umbrales, metadata, resultados),
+  `policies/*.yaml` (fuente canónica), `prompts/*.md`, `migrations/versions/`.
+
+### 8.5 Notas de trazabilidad (desde la revisión externa)
+
+- Código-en-rama vs código-en-imagen vs reproducible-desde-repo: todo lo
+  funcional está en `main` y es reproducible desde el repo (imagen
+  `localhost/argentgob-mvp-agent:latest` reconstruible con
+  `containers/agent.Containerfile`); la rama histórica
+  `feat/r0-reconciliation-baseline` contenía solo el alcance R0.
+- Las inconsistencias de la revisión externa quedaron cerradas: criterios de
+  aceptación (3 Cs) en `modulo2-entrega.md` §3.2; backlog 81 PH + 13 PH
+  operativas = sprints 94 PH (§3.3); H7 asignado solo a Sprint 2; "reconocimiento
+  probabilístico de PII" aclarado como inexistente; tres tipos de evidencia
+  separados en `docs/analytics/0003-arquitectura-y-evidencia.md` §4.
+
+---
+
+## 9. Documentos relacionados
+
+- [Plan de continuación (hoja de ruta predictiva)](plan-continuacion.md)
+- [Entrega del Módulo 2 (documentación técnica e ingeniería)](modulo2-entrega.md)
+- [Resúmenes de sesión por hito](sessions/)
+- [Arquitectura y evidencia de la capa predictiva](analytics/0003-arquitectura-y-evidencia.md)
+- [Análisis de tests de integración (sesgos Fase 6)](analytics/0004-analisis-tests-integracion.md)

@@ -1,8 +1,8 @@
-"""Tests del design system del dashboard (theme, charts, components, queries).
+"""Tests del design system del dashboard (palette, charts, components, queries).
 
 Verifican funciones puras sin tocar la base de datos:
-- `theme.strip_ansi` limpia secuencias ANSI (A7).
-- `theme.estado_color`/`estado_texto_color` mapean estados a colores.
+- `palette.strip_ansi` limpia secuencias ANSI (A7).
+- `palette.estado_color`/`estado_texto_color` mapean estados a colores.
 - `charts.*` producen specs ECharts válidos con `min: 0` en ejes de conteo.
 - `components.edad_humana` formatea edades.
 - `queries._saneo_nulos` reemplaza None por etiquetas explícitas (A5).
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from argentgob.dashboard import charts, components, queries, theme
+from argentgob.dashboard import charts, components, queries, palette as theme
 
 
 # ── theme.strip_ansi (A7) ────────────────────────────────────────────
