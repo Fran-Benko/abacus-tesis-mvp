@@ -450,7 +450,135 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 ---
 
-## 9. Documentos relacionados
+## 9. Detalle de creación del corpus predictivo
+
+> Fuente normativa: `scripts/build_synthetic_corpus.py` (Fase 2 del plan de
+> continuación) alineado con `docs/analytics/0001-dataset-specification.md`,
+> `0002-labeling-guide.md` y `risk_dataset_schema.json` (feature_schema_v1).
+
+### 9.1 Objetivo y unidad de análisis
+
+- **Unidad de observación:** tentativa de tool call **antes** de su ejecución
+  (el `ToolCallEnvelope` del pre-hook).
+- **Problema:** clasificación supervisada multiclase del riesgo de una tool
+  call (`LOW` / `MEDIUM` / `HIGH`).
+- **Anti-circularidad:** la etiqueta se asigna por **rúbrica humana** sobre
+  características observables (datos, operación, recurso, contenido, control);
+  **nunca** copia `observed_action` ni la salida del motor determinista. El
+  `label_rationale` apunta al eje/evidencia aplicado (auditable).
+
+### 9.2 Generación (parámetros y determinismo)
+
+| Parámetro | Valor |
+|---|---|
+| Script | `scripts/build_synthetic_corpus.py` |
+| Semilla | `--seed 42` (reproducible: misma seed ⇒ mismo corpus y `evaluation_freeze_hash`) |
+| Tamaño | `--size 3000` escenarios |
+| Particiones | 60 % train (1800) / 20 % calibration (600) / 20 % evaluation congelada (600), estratificado por clase |
+| Congelamiento | `evaluation_partition_frozen: true` + `evaluation_freeze_hash = sha256:c567c445…` (no se regenera sin cambiar `corpus_version`) |
+
+### 9.3 Dominios cubiertos (alineados con el código real)
+
+- **Herramientas:** `news`, `stock_price`, `crypto_price`.
+- **Clases de operación:** `READ`, `EXTERNAL_SEND`, `WRITE`, `DELETE`, `DDL`,
+  `CODE_EXEC`.
+- **Perfiles/roles:** `analyst`, `analyst_restricted`, `admin`.
+- **Entornos:** `LOCAL`, `TEST`, `PROD`.
+- **Recursos por herramienta:** p. ej. `duckduckgo.com`, `yahoo_finance`,
+  `market_data_api`, `coinmarketcap`, `binance_public`.
+
+### 9.4 Tipos de escenario y rúbrica de etiquetado
+
+| Categoría | Rúbrica (eje) | Etiqueta típica | Ejemplos en `build_synthetic_corpus.py` |
+|---|---|---|---|
+| **Benigno** | operación/contenido (lectura pública, sin PII ni patrones) | `LOW` | consulta de precios con ticker, noticias con términos financieros |
+| **Maligno** | contenido/datos/operación (inyección, exfiltración, escritura destructiva) | `HIGH` | `DROP TABLE…`, `xp_cmdshell`, exfiltración EMAIL+PAYMENT_NUMBER, `rm -rf`, host no permitido |
+| **Límite** | datos/operación/contenido (PII aislada, envío externo, estructura anidada) | `MEDIUM` | `POSSIBLE_DNI` en recurso permitido, `EXTERNAL_SEND` a host conocido, JSON profundamente anidado |
+| **Conflicto** | control (políticas con obligaciones incompatibles) | `MEDIUM`/`HIGH` | conflicto de políticas, `sensitivity_limit` excedido |
+
+> La **PII sintética** usa **placeholders** (`cliente.ejemplo@correo.test`,
+> `12345678`, `4111111111111111`); el detector `_is_pii_real` distingue
+> sintética de real (dominio `.test` y PAN/DNI de ejemplo no cuentan).
+
+### 9.5 Composición y validación del corpus (manifiesto `corpus_manifest.json`)
+
+| Métrica | Valor |
+|---|---|
+| Filas | 3000 (registros únicos: 3000; perfiles de features únicos: 2848; 152 filas duplicadas por features permitido por diseño: hora/args) |
+| Etiquetas | LOW 1500 (50 %) / MEDIUM 900 (30 %) / HIGH 600 (20 %) |
+| Fuente de escenarios | benigno 1477 / límite 720 / maligno 580 / conflicto 223 |
+| Herramientas | news 1486 / stock_price 951 / crypto_price 563 |
+| Perfiles | analyst 1684 / admin 838 / analyst_restricted 478 |
+| Splits | train 1800 / calibration 600 / evaluation 600 |
+| Nulos / NaN / requeridos faltantes | 0 |
+| PII real detectada | `[]` (ninguna) |
+| Balance y ≥15 % límite/conflicto | `balance_ok: true`, `min_15pct_boundary_conflict: true` |
+
+Validador: `scripts/validate_corpus.py` → **`RESULTADO: OK`** (valida contra
+`risk_dataset_schema.json` + controles, exit 0/1). Tests:
+`tests/unit/test_corpus.py` (8 tests: esquema, controles, PII, balance, split,
+dominios, congelado, anti-circularidad).
+
+### 9.6 Artefactos versionados
+
+| Artefacto | Ruta | Contenido |
+|---|---|---|
+| Corpus Parquet | `data/corpus/corpus_v1.parquet` | 3000 filas con features + target + metadatos |
+| Manifiesto | `data/corpus/corpus_manifest.json` | versión, seed, split, hash congelado, validación |
+| Reporte de validación | `data/corpus/validation_report.json` | PII real, unicidad, completitud, dominio, balance |
+| Generador | `scripts/build_synthetic_corpus.py` | reproducible (`--seed 42 --size 3000`) |
+| Validador | `scripts/validate_corpus.py` | exit 0/1 contra schema + controles |
+
+---
+
+## 10. Relevamiento consolidado — Sesiones `docs/sessions/` vs. revisión externa
+
+> Resultado del relevamiento documental de las sesiones 0001–0022 (realizado
+> con 4 subagentes de lectura en paralelo) para resolver las observaciones de
+> la revisión externa de la tesis (revisor académico). Fecha: 2026-11-09.
+
+### 10.1 Matriz de resolución de las observaciones del revisor
+
+| # | Observación del revisor | Veredicto hoy | Evidencia en `docs/sessions/` |
+|---|---|---|---|
+| 1 | Criterios de aceptación faltantes de H1–H4 y H8–H11 | ✅ Resuelto — formato 3 Cs (Dado/Cuando/Entonces) | `0016` + `modulo2-entrega.md` §3.2 |
+| 2 | HITL sin verificación end-to-end | ✅ Resuelto — appraisal MEDIUM → PENDING → APPROVED → resume → ejecución gobernada | `0016` (`test_hitl_end_to_end.py`), `0020` (escenario 5 HITL COMPLETO) |
+| 3 | Relaciones y cardinalidades sin detallar | ✅ Resuelto — 11+ relaciones con cardinalidades e invariantes | `0016` + `modulo2-entrega.md` §3.5 + `analytics/0003` §2.2 |
+| 4 | Sprints sin descomponer en tareas | ✅ Resuelto — 4 sprints (94 PH) + cierre (9 PH) con tareas/esfuerzo/dependencias | `0016` + `modulo2-entrega.md` §3.3 |
+| 5 | Componente predictivo ausente (H12–H16) | ✅ Resuelto — Fases 1–6 implementadas (corpus, 27 features anti-leakage, modelo logístico calibrado, inferencia pre_hook, precedencia BLOCK>HIGH>MEDIUM(HITL)>LOW>fallback) | `0010`–`0015` |
+| 6 | Backlog 82 PH vs sprints 84 PH | ✅ Aclarado — hoy backlog 81 PH + 13 PH operativas = sprints 94 PH | `0016` + `modulo2-entrega.md` §3.1/§3.3 |
+| 7 | H7 en Sprint 2 y 3 a la vez | ✅ Corregido — H7 solo en Sprint 2 | `modulo2-entrega.md` §3.3 |
+| 8 | "Reconocimiento probabilístico" de PII sin evidencia | ✅ Aclarado — no existe; sanitización 100 % regex determinista | Fase 0 (`plan-continuacion.md` §1.1) + `0002` |
+| 9 | Código-en-rama vs imagen vs reproducible | ✅ Resuelto — `main` reproducible; rama histórica solo R0 | Nota de trazabilidad en `modulo2-entrega.md` |
+| 10 | Separar evidencia: tests / métricas analíticas / métricas predictivas | ✅ Resuelto — tres secciones separadas | `0014` + `analytics/0003` §4.1–4.3 |
+
+### 10.2 Estado consolidado del prototipo (por los 4 subagentes + verificación)
+
+- **Hitos completos:** R1–R5, H1–H8, capa predictiva Fases 1–6 (H12–H16),
+  prioridad alta (criterios, HITL E2E, PG real, concurrencia, CrewAI real),
+  prioridad media (deriva PSI, políticas YAML, demo E2E 5 escenarios) y
+  rediseño UX/UI v4.
+- **Tests:** suite completa verificada **334 passed + 9 skipped** (ver §3.1).
+- **Migraciones:** 001 → **007 (head)** (ver §8.2).
+- **E2E:** H8 23/23 · Fase 4 6/6 · Fase 5 19/19 · demo 5/5 escenarios.
+- **Dashboard:** 5 vistas multipágina (ver §10.3).
+
+### 10.3 Capturas del dashboard (todas las secciones)
+
+> Carpeta: `docs/dashboard-captures/` (capturas tomadas el 2026-11-09 contra el
+> stack real, `localhost:8501`).
+
+| Vista | Archivo |
+|---|---|
+| Executive Overview | [01-executive-overview.png](dashboard-captures/01-executive-overview.png) |
+| Auditoría y HITL | [02-auditoria-hitl.png](dashboard-captures/02-auditoria-hitl.png) |
+| Inteligencia Predictiva | [03-inteligencia-predictiva.png](dashboard-captures/03-inteligencia-predictiva.png) |
+| Salud del Modelo | [04-salud-modelo.png](dashboard-captures/04-salud-modelo.png) |
+| Operaciones y Demo | [05-operaciones-demo.png](dashboard-captures/05-operaciones-demo.png) |
+
+---
+
+## 11. Documentos relacionados
 
 - [Plan de continuación (hoja de ruta predictiva)](plan-continuacion.md)
 - [Entrega del Módulo 2 (documentación técnica e ingeniería)](modulo2-entrega.md)
