@@ -67,8 +67,8 @@ Grep de los resumenes para conocer el baseline histórico:
 baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 = 126
 → H7 +24 unit = 150 → H8 +42 = **192 passed** (unit).
 
-> **Cifra oficial actual (verificada, AV-02):** la suite completa
-> `pytest tests/` reporta **428 passed + 10 skipped** (2026-11-10). Los 10
+> **Cifra oficial actual (verificada, AV-03):** la suite completa
+> `pytest tests/` reporta **473 passed + 10 skipped** (2026-11-10). Los 10
 > skipped son por ausencia de `TEST_DATABASE_URL` / `DATABASE_URL` (ver §7
 > Límites): 7 de `test_postgres_real.py`, 2 de `test_dashboard_apptest.py` y 1
 > de `test_agent_live_llm.py`.
@@ -330,8 +330,20 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
   de seed ausente, identidad HITL sin configurar, rol de runtime superusuario y
   predictor ausente en la imagen. Detalle en
   [sesión 0027](sessions/0027-resumen-av-02-compose-inicializacion.md).
-- Próximo hito: **AV-03 — UI financiera en vivo** (ver
-  [hitos](implementacion-agente-vivo/hitos.md)). AV-03…AV-06 siguen pendientes.
+- **AV-03 — UI financiera en vivo: completo (PASS)** — verificado el
+  2026-11-10: gate `scripts/verify_live_ui_av03.py` **18/18** contra el stack
+  desplegado con LLM real (visibilidad incremental 0.01 s con el run en
+  `RUNNING`), gate `scripts/verify_agent_live.py --milestone AV-03 --with-llm`
+  PASS (109 tests + 1 smoke LLM real), suite **473 passed + 10 skipped**, PG
+  real 7/7, H8 23/23, Fase 4 6/6, Fase 5 19/19, corpus OK, demo determinista 5
+  escenarios, CLI financiera `status=SUCCESS` y cadena de auditoría íntegra.
+  Implementa `argentgob.dashboard.live_client`, `live_session` y la vista
+  `pages/live_finance.py` (sección nueva sin sustituir la demo determinista,
+  idempotencia por intención, polling acotado a la región activa, timeline por
+  categoría, HITL solo como pendiente y evidencia por IDs seguros). Detalle en
+  [sesión 0028](sessions/0028-resumen-av-03-ui-financiera-en-vivo.md).
+- Próximo hito: **AV-04 — Fronteras PII e IPI** (ver
+  [hitos](implementacion-agente-vivo/hitos.md)). AV-04…AV-06 siguen pendientes.
 
 ---
 
@@ -429,7 +441,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 | H8 | Consola sanitizada y resolución autorizada | ✅ Implementada y verificada | migración 004, `src/argentgob/console/` + `identity/`, E2E 23/23 |
 | H9 | Integración con CrewAI (GovernedTool) | ✅ Implementada y verificada | `src/argentgob/module_a/governed_tool.py`, `test_crewai_real.py` |
 | H10 | Dashboard de monitoreo (5 vistas, ECharts, auto-refresh) | ✅ Implementada y verificada | `src/argentgob/dashboard/`, AppTest, browser |
-| H11 | Suite de tests unitarios e integración | ✅ Implementada (**428 passed + 10 skipped**) | `pytest tests/` (verificado 2026-11-10, AV-02) |
+| H11 | Suite de tests unitarios e integración | ✅ Implementada (**473 passed + 10 skipped**) | `pytest tests/` (verificado 2026-11-10, AV-02) |
 | H12 | Corpus predictivo versionado (sintético) | ✅ Implementada y verificada | `data/corpus/corpus_v1.parquet` + `corpus_manifest.json` (seed 42, hash congelado), `validate_corpus.py` OK |
 | H13 | Preparación de features (27, pre-ejecución, anti-leakage) | ✅ Implementada y verificada | `src/argentgob/analytics/features.py` (FeatureBuilder) |
 | H14 | Entrenamiento/calibración/evaluación del modelo | ✅ Implementada y verificada | `scripts/train_risk_model.py`, `data/models/risk_model_v1/` (pipeline.joblib, thresholds.json, metrics) |
@@ -455,7 +467,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 | Verificación | Resultado |
 |---|---|
-| `pytest tests/` (suite completa, imagen reconstruida) | **428 passed + 10 skipped** (AV-02, 2026-11-10) |
+| `pytest tests/` (suite completa, imagen reconstruida) | **473 passed + 10 skipped** (AV-03, 2026-11-10) |
 | E2E H8 (`scripts/e2e_h8_console.py`) | 23/23 checks OK (sobre DB de prueba limpia; 22/23 sobre la DB compartida por acumulación de approvals PENDING) |
 | E2E Fase 4 (`scripts/e2e_fase4_predictive.py`) | 6/6 checks OK |
 | E2E Fase 5 (`scripts/e2e_fase5_evidence.py`) | 19/19 checks OK |
@@ -595,7 +607,7 @@ dominios, congelado, anti-circularidad).
   prioridad alta (criterios, HITL E2E, PG real, concurrencia, CrewAI real),
   prioridad media (deriva PSI, políticas YAML, demo E2E 5 escenarios) y
   rediseño UX/UI v4.
-- **Tests:** suite completa verificada **428 passed + 10 skipped** (ver §3.1).
+- **Tests:** suite completa verificada **473 passed + 10 skipped** (ver §3.1).
 - **Migraciones:** 001 → **010 (head)** (ver §8.2).
 - **E2E:** H8 23/23 · Fase 4 6/6 · Fase 5 19/19 · demo 5/5 escenarios.
 - **Dashboard:** 5 vistas multipágina (ver §10.3).
@@ -617,8 +629,8 @@ dominios, congelado, anti-circularidad).
 
 ## 11. Documentos relacionados
 
-- **[Plan v3 de agente en vivo y escenarios públicos](implementacion-agente-vivo/README.md)** — hoja de ruta de la ampliación AV-00…AV-06. AV-00, AV-01 y AV-02 están completos con gate PASS ([0025](sessions/0025-resumen-av-00-baseline-contratos.md), [0026](sessions/0026-resumen-av-01-servicio-supervisor-eventos.md),
-           [0027](sessions/0027-resumen-av-02-compose-inicializacion.md)); AV-03…AV-06 siguen pendientes. Incluye contratos, perfiles/guardrails, configuración, demos con LLM real y tests/gates por hito.
+- **[Plan v3 de agente en vivo y escenarios públicos](implementacion-agente-vivo/README.md)** — hoja de ruta de la ampliación AV-00…AV-06. AV-00, AV-01, AV-02 y AV-03 están completos con gate PASS ([0025](sessions/0025-resumen-av-00-baseline-contratos.md), [0026](sessions/0026-resumen-av-01-servicio-supervisor-eventos.md),
+           [0027](sessions/0027-resumen-av-02-compose-inicializacion.md), [0028](sessions/0028-resumen-av-03-ui-financiera-en-vivo.md)); AV-04…AV-06 siguen pendientes. Incluye contratos, perfiles/guardrails, configuración, demos con LLM real y tests/gates por hito.
 - [Plan de continuación (hoja de ruta predictiva histórica)](plan-continuacion.md)
 - [Entrega del Módulo 2 (documentación técnica e ingeniería)](modulo2-entrega.md)
 - [Resúmenes de sesión por hito](sessions/)

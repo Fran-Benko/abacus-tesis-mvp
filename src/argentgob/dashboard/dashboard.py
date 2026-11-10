@@ -13,6 +13,7 @@ import streamlit as st
 from argentgob.dashboard.pages import (
     audit_hitl,
     executive_overview,
+    live_finance,
     model_health,
     operations_demo,
     predictive_intelligence,
@@ -56,6 +57,12 @@ pages = [
         title="Operaciones y Demo",
         icon=":material/terminal:",
         url_path="operations",
+    ),
+    st.Page(
+        live_finance.render,
+        title="Finanzas en vivo",
+        icon=":material/bolt:",
+        url_path="live-finance",
     ),
 ]
 

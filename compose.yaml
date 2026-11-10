@@ -148,6 +148,8 @@ services:
       ARGENTGOB_DB_PORT: "5432"
       ARGENTGOB_DB_NAME: argentgob
       AGENT_API_BASE: "http://agent:8090"
+      # AV-03: el dashboard consume la API de runs con el token de servicio.
+      AGENT_API_SERVICE_TOKEN_FILE: /run/secrets/service_token
       # Identidad HITL del despliegue (fixture solo LOCAL/TEST).
       IDENTITY_DEVELOPMENT_ONLY: "true"
       IDENTITY_FIXTURE_ROLES: '{"auditor-1": ["viewer", "auditor"]}'
@@ -156,6 +158,7 @@ services:
       RISK_CORPUS_PATH: "/app/data/corpus/corpus_v1.parquet"
     secrets:
       - dashboard_password
+      - service_token
     ports:
       - "127.0.0.1:8501:8501"
     depends_on:

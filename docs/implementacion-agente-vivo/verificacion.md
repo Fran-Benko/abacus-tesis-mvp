@@ -9,7 +9,7 @@
 | Unitario/contrato | Sin red, reloj falso, contadores y barreras | `tests/unit/test_agent_server.py`, `test_run_supervisor.py`, `test_run_events.py`, `test_run_aggregation.py`, `test_pep_observer.py` (**implementados en AV-01**); `test_public_schemas.py`, `test_public_guardrails.py`, `test_content_boundary.py` (AV-04/05) |
 | Integración determinista | CrewAI/tools reales; proveedor/LLM dobles explícitos | `tests/integration/test_agent_live_flow.py` (**implementado en AV-01**), `test_public_agentic_flows.py` (AV-05); reutilizar tests de perfiles/PEP/HITL existentes |
 | Integración PG real | DB/roles de prueba, esquema y servicios reales | `tests/integration/test_agent_live_postgres.py`, `test_public_hitl_postgres.py`; extender pruebas H6/H7/H8 relacionadas |
-| UI | AppTest y API controlada | `tests/unit/test_agent_live_apptest.py`; navegador para evidencia incremental real |
+| UI | AppTest y API controlada | `tests/unit/test_live_finance_apptest.py`, `test_live_session.py`, `test_live_client.py` y `tests/integration/test_live_ui_flow.py` (**implementados en AV-03**); navegador para evidencia incremental real |
 | LLM local real | llama.cpp + CrewAI + fixtures/PG reales | `tests/integration/test_agent_live_llm.py` (**implementado en AV-01**, marker `llm_local`); `scripts/e2e_agent_live.py` en AV-05 |
 | Despliegue/imagen | Podman Compose y secretos de prueba | `tests/unit/test_av02_stack.py` (**implementado en AV-02**) + `scripts/verify_stack_av02.py` (gate real con PostgreSQL) |
 
@@ -179,6 +179,31 @@ podman run --rm --network argentgob-mvp_default -v "${src}:/app:Z" -w /app `
 
 `verify_stack_av02.py` cambia temporalmente las contraseñas de los roles de clúster para probar el escape y las restaura al finalizar; si se interrumpe, re-ejecutar `python -m argentgob.db.init`.
 
+### Disponibles desde AV-03
+
+```powershell
+$src = (Get-Location).Path
+# Gate real de la UI financiera en vivo (API + LLM reales, sin monkeypatch)
+podman run --rm --network argentgob-mvp_default `
+  -e "AGENT_API_BASE=http://agent:8090" `
+  -e "AGENT_API_SERVICE_TOKEN_FILE=/run/secrets/service_token" `
+  -e "ENVIRONMENT=LOCAL" `
+  -v "${src}:/app:Z" -v "${src}/.secrets/service_token:/run/secrets/service_token:ro,Z" `
+  -w /app localhost/argentgob-mvp-agent:latest `
+  python scripts/verify_live_ui_av03.py
+# Gate pytest del hito (109 tests) + smoke LLM real
+podman run --rm --network argentgob-mvp_default `
+  -e "OPENAI_API_BASE=http://llama-server:8080/v1" -e "DATABASE_URL=..." `
+  -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  python scripts/verify_agent_live.py --milestone AV-03 --with-llm
+# Tests de la UI sin stack (cliente falso)
+podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  pytest tests/unit/test_live_session.py tests/unit/test_live_client.py `
+  tests/unit/test_live_finance_apptest.py -q -p no:cacheprovider
+```
+
+`verify_live_ui_av03.py` mide la visibilidad incremental con el run todavia activo y falla si supera 3 s; no reutiliza logs ni capturas del resultado final.
+
 ## 4. Evidencia de cierre
 
 Por gate, conservar en ubicación de evidencia acordada por el proyecto (fuera del repo para logs temporales) un resumen machine-readable sin payloads:
@@ -272,3 +297,29 @@ Registro completo en [sesión 0027](../sessions/0027-resumen-av-02-compose-inici
 | `python -m argentgob.audit.cli` | `OK: la cadena de auditoría es íntegra.` | |
 
 **Regla derivada:** el gate de topología no puede ejecutarse solo con parseo de YAML. Crea su propia base, ejecuta el inicializador real y verifica privilegios efectivos de los roles; los roles son de clúster, por lo que el gate restaura las contraseñas del despliegue al terminar.
+
+## 9. Gate medido en AV-03 (2026-11-10)
+
+Registro completo en [sesion 0028](../sessions/0028-resumen-av-03-ui-financiera-en-vivo.md). Imagenes `localhost/argentgob-mvp-agent:latest` y `argentgob-mvp-dashboard` reconstruidas y redeployadas antes de validar.
+
+| Verificacion | Resultado real | Nota |
+|---|---|---|
+| `scripts/verify_live_ui_av03.py` | **18 passed, 0 failed** | Stack desplegado con LLM real |
+| Visibilidad incremental (T-B06) | **0.01 s** con el run en `RUNNING` | Presupuesto del gate: <= 3 s |
+| `scripts/verify_agent_live.py --milestone AV-03` | `collected: 109`, `109 passed`, `PASS` | Sin LLM |
+| `scripts/verify_agent_live.py --milestone AV-03 --with-llm` | `109 passed` + `1 passed` (LLM), `PASS` | Smoke real sin monkeypatch |
+| `pytest tests/` | **473 passed, 10 skipped** | Mismos skips que AV-02 |
+| `pytest tests/integration/test_postgres_real.py` | 7 passed | DB aislada `argentgob_av03_test` |
+| `scripts/e2e_h8_console.py` | 23 passed, 0 failed | DB aislada `argentgob_av03_h8` |
+| `scripts/e2e_fase4_predictive.py` / `e2e_fase5_evidence.py` | 6/6 y 19/19 | DB aislada `argentgob_av03_h8` |
+| `pytest tests/unit/test_dashboard_apptest.py` con DB | 2 passed | Vistas multipagina sin excepciones |
+| Recorrido de navegador | `RUNNING` con 2 eventos a los 4 s; 64 a los 64 s; `PARTIAL` con informe real a los 154 s | `http://localhost:8501/live-finance`, run `b000322f` |
+| Polling detenido en terminal (T-B07) | Sin sondeo adicional tras `PARTIAL` | Contador de sondeos estable |
+| Idempotencia de intencion (T-B02) | Misma clave y mismo `run_id` | Sin segundo proceso |
+| Actor ajeno (T-B03) | 404 uniforme, mensaje seguro | Sin traza ni payload |
+| Timeline sin raw (T-P05) | 65 filas, 5 categorias, sin `execution_arguments`/`raw_payload` | |
+| `scripts/validate_corpus.py` | `RESULTADO: OK` | |
+| `scripts/demo_end_to_end.py --real` | 5 escenarios OK/BLOCK/HITL | Demo anterior intacta (T-R02) |
+| `python -m argentgob.agent.main AAPL --profile analyst` | `status=SUCCESS` | CLI financiera con LLM real |
+| `python -m argentgob.audit.cli` | `OK: la cadena de auditoria es integra.` | |
+| Ruff (archivos nuevos/modificados) | `All checks passed!` | `EXE002` es artefacto del bind mount de Windows |

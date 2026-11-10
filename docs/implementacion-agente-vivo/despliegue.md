@@ -2,6 +2,8 @@
 
 **Propuesta para AV-01/02; no describe servicios nuevos ya desplegados.** [Índice](README.md), [contratos](contratos.md), [gates](verificacion.md).
 
+> **Estado AV-03 (2026-11-10):** el dashboard monta `service_token` y exporta `AGENT_API_SERVICE_TOKEN_FILE`, de modo que la vista Finanzas en vivo consume la API interna con autenticación de servicio. Evidencia en [sesión 0028](../sessions/0028-resumen-av-03-ui-financiera-en-vivo.md).
+>
 > **Estado AV-02 (2026-11-10):** `compose.yaml` declara `agent` como API persistente (`python -m argentgob.live.server`, puerto interno 8090, sin publicación al host ni stdin/tty) y `migrator` como inicializador obligatorio (`python -m argentgob.db.init`) con `service_completed_successfully`. Los secretos se montan por consumidor y el DSN se construye con escape (`argentgob.db.dsn`). Evidencia en [sesión 0027](../sessions/0027-resumen-av-02-compose-inicializacion.md).
 
 ## 1. Topología
@@ -26,10 +28,10 @@ Los nombres nuevos de esta tabla son **propuestos**: implementarlos/validarlos e
 |---|---|---|
 | `OPENAI_API_BASE` | agent | `http://llama-server:8080/v1`, cerrado por operador, no por usuario |
 | `OPENAI_MODEL_NAME`, clave local | agent | Mantener configuración financiera probada; no function calling nativo sin nuevo smoke |
-| `AGENT_API_BASE` nuevo | dashboard | `http://agent:8090`, configuración interna |
+| `AGENT_API_BASE` | dashboard | **Implementado en AV-03**: `http://agent:8090`, configuración interna; la vista Finanzas en vivo lo consume |
 | `AGENT_API_HOST`, `AGENT_API_PORT` | agent | `0.0.0.0` y `8090`; implementados en `argentgob.live.server` (AV-01) |
 | `AGENT_API_SERVICE_TOKEN` / `_FILE` | agent | Token por cabecera `x-argentgob-service-token`; **AV-02** lo monta como `.secrets/service_token` vía `AGENT_API_SERVICE_TOKEN_FILE`. Ausente fuera de LOCAL/TEST → 503 fail-closed |
-| Credencial servicio API nueva | dashboard/agent | Secret montado; sin default público, sin eco ni query string |
+| Credencial servicio API | dashboard/agent | **Implementado en AV-03**: el dashboard monta `.secrets/service_token` y lo envía por cabecera; sin default público, sin eco ni query string |
 | Identidad/roles H8 | dashboard/agent | **Implementado en AV-02**: `IDENTITY_FIXTURE_ROLES` y `AUTHORIZED_AUDITOR_ROLES` declarados en `compose.yaml`; fixture solo LOCAL/TEST, explícitamente no autenticación productiva |
 | DB secret canónico | postgres/migrator/agent/dashboard | **Implementado en AV-02**: `.secrets/{postgres,runtime,dashboard}_password` montados por servicio; `resolve_database_url()` construye el DSN con `quote` y el archivo gana sobre una URL heredada |
 | `ENVIRONMENT`, `LOG_LEVEL` | consumidores pertinentes | LOCAL/TEST, INFO sin verbose raw; no anchor universal con secretos de más |

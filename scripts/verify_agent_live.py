@@ -44,12 +44,25 @@ MILESTONE_SELECTORS: dict[str, list[str]] = {
         "tests/integration/test_agent_live_flow.py",
         "tests/integration/test_policy_seed_declarativo.py",
     ],
+    "AV-03": [
+        "tests/unit/test_live_session.py",
+        "tests/unit/test_live_client.py",
+        "tests/unit/test_live_finance_apptest.py",
+        "tests/integration/test_live_ui_flow.py",
+        "tests/unit/test_run_events.py",
+        "tests/unit/test_run_supervisor.py",
+        "tests/unit/test_agent_server.py",
+        "tests/unit/test_dashboard_apptest.py",
+        "tests/unit/test_dashboard_demo_runner.py",
+        "tests/unit/test_dashboard_design_system.py",
+    ],
 }
 
 # Pruebas que exigen llama.cpp real (opt-in explícito).
 LLM_SELECTORS: dict[str, list[str]] = {
     "AV-01": ["tests/integration/test_agent_live_llm.py"],
     "AV-02": ["tests/integration/test_agent_live_llm.py"],
+    "AV-03": ["tests/integration/test_agent_live_llm.py"],
 }
 
 
@@ -109,6 +122,12 @@ def _preflight() -> dict[str, bool]:
         "database_configured": bool(os.environ.get("DATABASE_URL")),
         "init_module_present": (ROOT / "src" / "argentgob" / "db" / "init.py").is_file(),
         "compose_present": (ROOT / "compose.yaml").is_file(),
+        "live_ui_present": (
+            ROOT / "src" / "argentgob" / "dashboard" / "pages" / "live_finance.py"
+        ).is_file(),
+        "live_client_present": (
+            ROOT / "src" / "argentgob" / "dashboard" / "live_client.py"
+        ).is_file(),
     }
 
 

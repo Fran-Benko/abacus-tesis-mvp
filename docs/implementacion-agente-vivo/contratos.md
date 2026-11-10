@@ -61,6 +61,8 @@ Ruta interna, JSON estricto; FastAPI/ASGI con un worker. No asumir que estas dep
 
 `/ready` separa `checks` (configuración mínima del servicio) de `capabilities` (`llm_base_configured`, `llm_reachable`, `predictor_artifacts_present`, `capacity_free`), de modo que un cupo ocupado no se confunda con un proceso roto. **Desde AV-02** `checks` incluye `db_reachable`, `schema_en_head` y `catalogo_sembrado`: un inicializador fallido deja `ready=false` y `POST /runs` responde 503; sin LLM alcanzable también responde 503, aunque `/health`, `/ready` y el dashboard siguen operativos. El supervisor mantiene un run activo global, idempotencia por `(actor, idempotency_key)` con digest canónico del input, TTL de runs terminales y tombstones acotados. Un reinicio del servicio pierde runs y eventos: la UI debe explicar la pérdida sin simular recovery.
 
+**Desde AV-03** el dashboard consume esta API con `argentgob.dashboard.live_client` (token de servicio montado, actor por cabecera, errores traducidos a mensajes seguros sin eco de payload) y `argentgob.dashboard.live_session` (clave de idempotencia determinista por intención, cursor incremental, polling detenido en estado terminal). La vista `pages/live_finance.py` admite un run solo por intención explícita y sondea la región activa en `st.fragment(run_every="2s")`; no reenvía el `POST` en rerun ni en doble clic, no aprueba HITL y no muestra consola raw. La visibilidad incremental medida en el gate fue 0.01 s con el run en `RUNNING`.
+
 ### POST /runs
 
 ```json

@@ -24,9 +24,9 @@ Referencia histórica más reciente: [sesión 0022](../sessions/0022-resumen-red
 
 Existe: Crew financiero, tools de noticias/precios, sanitización determinista de telemetría, políticas YAML, predictor financiero, H6/H8, auditoría encadenada, dashboard multipágina y demo de cinco escenarios sin LLM. `test_crewai_real.py` prueba tools CrewAI con proveedor fake; su nombre no acredita inferencia contra llama.cpp.
 
-No existe todavía lo que aquí se especifica: timeline incremental del agente, catálogo público, proyección segura de resultados, control IPI de documentos y enlace de resume al proceso propietario del hold. El servidor HTTP de runs existe desde AV-01 y el agente de compose ya es una API persistente desde AV-02. No presentar los objetivos restantes como baseline implementado.
+No existe todavía lo que aquí se especifica: catálogo público de cinco dominios, control IPI de documentos y enlace de resume al proceso propietario del hold. El servidor HTTP de runs existe desde AV-01, el agente de compose es una API persistente desde AV-02 y el timeline incremental con UI financiera en vivo existe desde AV-03. No presentar los objetivos restantes como baseline implementado.
 
-La transformación operativa actual hace normalización de strings, no masking PII. El runner de la demo copia logs al estado al finalizar: no reutilizar ese mecanismo como prueba de tiempo real. La imagen del agente ya copia `data/` (AV-02), por lo que el predictor carga sin bind mount. Corregir las brechas restantes solo en su hito correspondiente.
+La transformación operativa actual hace normalización de strings, no masking PII. El runner de la demo determinista copia logs al estado al finalizar: no reutilizar ese mecanismo como prueba de tiempo real; la vista Finanzas en vivo (AV-03) usa eventos de la API, no logs. La imagen del agente ya copia `data/` (AV-02), por lo que el predictor carga sin bind mount. Corregir las brechas restantes solo en su hito correspondiente.
 
 ## 3. Arquitectura y alcance mínimo
 
@@ -60,12 +60,12 @@ Demos **D-01…D-12** son nuevas ejecuciones LLM reales propuestas; no se suman 
 | AV-00 — Baseline operativo y contratos | **Completo** | **PASS** — [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md) |
 | AV-01 — Servicio, supervisor y eventos | **Completo** | **PASS** — [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md) |
 | AV-02 — Stack reproducible | **Completo** | **PASS** — [sesión 0027](../sessions/0027-resumen-av-02-compose-inicializacion.md) |
-| AV-03 — UI financiera en vivo | Pendiente | No ejecutado |
+| AV-03 — UI financiera en vivo | **Completo** | **PASS** — [sesión 0028](../sessions/0028-resumen-av-03-ui-financiera-en-vivo.md) |
 | AV-04 — Fronteras PII/IPI | Pendiente | No ejecutado |
 | AV-05 — Dominios, demos reales y HITL | Pendiente | No ejecutado |
 | AV-06 — Regresión y entrega | Pendiente | No ejecutado |
 
-Actualizar esta tabla solo con referencia a evidencia de [cierre](verificacion.md); documentación redactada no equivale a un hito cerrado. AV-00, AV-01 y AV-02 se cerraron con pruebas de aplicación ejecutadas (ver [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md), [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md) y [sesión 0027](../sessions/0027-resumen-av-02-compose-inicializacion.md)); los hitos restantes siguen sin evidencia.
+Actualizar esta tabla solo con referencia a evidencia de [cierre](verificacion.md); documentación redactada no equivale a un hito cerrado. AV-00, AV-01, AV-02 y AV-03 se cerraron con pruebas de aplicación ejecutadas (ver [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md), [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md), [sesión 0027](../sessions/0027-resumen-av-02-compose-inicializacion.md) y [sesión 0028](../sessions/0028-resumen-av-03-ui-financiera-en-vivo.md)); los hitos restantes siguen sin evidencia.
 
 ## 6. Hallazgos de AV-00 que condicionan los hitos siguientes
 
