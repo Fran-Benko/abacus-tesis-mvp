@@ -1,0 +1,68 @@
+# Plan v3 — Agente en vivo, despliegue y escenarios públicos
+
+**Fecha:** 2026-11-10. **Estado:** documentación rectora preparada; implementación pendiente.
+
+Esta versión convierte la revisión v2 en un paquete implementable con contratos, unidades, pruebas y gates por hito. Reemplaza v1/v2 como hoja de ruta de estos tres frentes; no reemplaza los hitos históricos H1–H16 ni certifica sus cierres. Los IDs **AV-00…AV-06** pertenecen exclusivamente a esta ampliación.
+
+## 1. Lectura y autoridad
+
+| Documento | Qué gobierna | Cuándo leer |
+|---|---|---|
+| [Hitos y entregables](hitos.md) | DAG, unidades, entrada, tests, gate y entregables por AV | Antes de iniciar o cerrar cualquier hito |
+| [Contratos y flujos](contratos.md) | API, identidad, eventos, estados, argumentos/resultados, HITL e invariantes | Antes de modificar ejecución, observación o UI |
+| [Catálogo de escenarios](escenarios.md) | Inputs/outputs, perfiles, tools, políticas, guardrails y demos LLM | Antes de implementar un dominio o una demo |
+| [Configuración y despliegue](despliegue.md) | Topología, configuración por servicio, inicialización y fallos | Antes de tocar compose, imágenes o Settings |
+| [Pruebas y cierre](verificacion.md) | Casos identificados, runners, evidencia y aceptación | Al diseñar tests y en todo gate |
+
+Orden obligatorio: [consideraciones del proyecto](../PROJECT_CONSIDERATIONS.md) → este índice → hito activo → contratos y documentos aplicables → [sesiones recientes](../sessions/). [La hoja de ruta predictiva](../plan-continuacion.md) y [Módulo 2](../modulo2-entrega.md) son contexto histórico/académico, no el backlog de esta ampliación.
+
+**Reglas de autoridad:** las invariantes y el plan normativo externo siguen vigentes. Un conflicto con ellos bloquea la unidad afectada hasta documentar una decisión. Dentro de este paquete, contratos gobierna interfaces; escenarios gobierna permisos/casos; despliegue gobierna configuración; verificación gobierna el oráculo; hitos gobierna dependencias/entregables. No cambiar un oráculo después de ver un fallo para obtener PASS. Una modificación semántica exige actualizar todos los documentos afectados y repetir las pruebas dependientes.
+
+## 2. Baseline: qué existe y qué no
+
+Referencia histórica más reciente: [sesión 0022](../sessions/0022-resumen-rediseno-v4.md), **334 passed + 9 skipped**, y [sesión 0023](../sessions/0023-resumen-llama-server-gpu-e2e-agente-real.md), GPU/CDI y E2E financiero con LLM local del 2026-11-09. Migraciones presentes hasta **007**; la revisión aplicada en DB debe comprobarse en el entorno de implementación.
+
+Existe: Crew financiero, tools de noticias/precios, sanitización determinista de telemetría, políticas YAML, predictor financiero, H6/H8, auditoría encadenada, dashboard multipágina y demo de cinco escenarios sin LLM. `test_crewai_real.py` prueba tools CrewAI con proveedor fake; su nombre no acredita inferencia contra llama.cpp.
+
+No existe todavía lo que aquí se especifica: servidor HTTP de runs, timeline incremental del agente, catálogo público, proyección segura de resultados, control IPI de documentos y enlace de resume al proceso propietario del hold. El agente de compose sigue siendo interactivo/on-demand. No presentar estos objetivos como baseline implementado.
+
+La transformación operativa actual hace normalización de strings, no masking PII. El runner de la demo copia logs al estado al finalizar: no reutilizar ese mecanismo como prueba de tiempo real. La imagen del agente no provisiona automáticamente los artefactos predictivos de `data/`. Corregir estas brechas solo en su hito correspondiente.
+
+## 3. Arquitectura y alcance mínimo
+
+- PostgreSQL 16, llama.cpp local, agente HTTP de una instancia y Streamlit. Inicializador run-once para Alembic + políticas.
+- Un proceso hijo por run y un run activo global; polling, callback explícito y buffer acotado. Sin brokers, Redis, WebSockets, plugins ni workflow distribuido.
+- Mantener CLI y demo financiera actuales. Agregar sección de agente real, no reemplazarlas.
+- Cinco contextos públicos con LLM real y **proveedores sintéticos**. Sin conexiones institucionales reales, envíos reales, adjudicación de beneficios ni datos personales reales.
+- El predictor financiero conserva su comportamiento; para nuevos dominios, control determinista y rótulo «predictor no validado». Sin reentrenamiento obligatorio.
+- HITL: aprobación humana y ejecución única de la acción retenida. No checkpoint/replay automático del razonamiento del Crew tras resume o reinicio.
+- No exponer cadena de pensamiento, prompts internos ni stdout de CrewAI. La timeline muestra operaciones verificables.
+
+## 4. Trazabilidad de requisitos
+
+| Requisito | Hitos | Contrato/catálogo | Pruebas/gate |
+|---|---|---|---|
+| R-A: stack completo y reproducible | AV-02, AV-06 | Despliegue | T-A01…T-A08; G-AV-02 |
+| R-B: agente local en vivo | AV-01, AV-03 | API/eventos/UI | T-B01…T-B09; G-AV-01/03 |
+| R-C1: trámites y PII | AV-04, AV-05 | `tramites` y frontera PII | T-P01…T-P06; D-01/02 |
+| R-C2: beneficios y supervisión | AV-05 | `beneficios`, HITL | T-H01…T-H07; D-03/04 |
+| R-C3: comunicaciones e IPI | AV-04, AV-05 | `comunicaciones`, liberación | T-I01…T-I05; D-05/06 |
+| R-C4: auditoría trazable | AV-05 | `auditoria` | T-D01…T-D03; D-07/08 |
+| R-C5: consultas normativas | AV-05 | `normativa` | T-J01…T-J04; D-09/10 |
+| R-V: validación transversal | AV-00, AV-06 | Invariantes y evidencia | T-R01…T-R06; G-AV-06 |
+
+Demos **D-01…D-12** son nuevas ejecuciones LLM reales propuestas; no se suman artificialmente a los cinco escenarios stub existentes ni prueban eficacia predictiva pública.
+
+## 5. Seguimiento inicial
+
+| Hito | Estado | Resultado de gate |
+|---|---|---|
+| AV-00 — Baseline operativo y contratos | Pendiente | No ejecutado |
+| AV-01 — Servicio, supervisor y eventos | Pendiente | No ejecutado |
+| AV-02 — Stack reproducible | Pendiente | No ejecutado |
+| AV-03 — UI financiera en vivo | Pendiente | No ejecutado |
+| AV-04 — Fronteras PII/IPI | Pendiente | No ejecutado |
+| AV-05 — Dominios, demos reales y HITL | Pendiente | No ejecutado |
+| AV-06 — Regresión y entrega | Pendiente | No ejecutado |
+
+Actualizar esta tabla solo con referencia a evidencia de [cierre](verificacion.md); documentación redactada no equivale a AV-00 cerrado. Esta sesión es documental: no se ejecutaron pruebas de aplicación ni se alteró infraestructura.

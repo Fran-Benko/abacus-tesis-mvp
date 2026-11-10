@@ -15,9 +15,15 @@ convenciones antes de tocar código:
 | Documento | Propósito |
 |---|---|
 | [`docs/PROJECT_CONSIDERATIONS.md`](docs/PROJECT_CONSIDERATIONS.md) | **Punto de partida obligatorio**: estado alcanzado, comandos de verificación, topología Podman, trampas recurrentes, convención de branches |
-| [`docs/plan-continuacion.md`](docs/plan-continuacion.md) | **Hoja de ruta actual**: fases para incorporar la capa predictiva (H12–H16) sobre la base H1–H11 |
-| [`docs/sessions/`](docs/sessions/) | Resúmenes de sesión por hito (qué se implementó, tests, E2E, bugs) |
-| [`docs/modulo2-entrega.md`](docs/modulo2-entrega.md) | Entrega del Módulo 2 (estado documentado del prototipo) |
+| [`docs/implementacion-agente-vivo/README.md`](docs/implementacion-agente-vivo/README.md) | **Hoja de ruta vigente de esta ampliación (v3)**: despliegue, agente en vivo y cinco contextos públicos; todo AV pendiente hasta evidencia de cierre |
+| [`docs/implementacion-agente-vivo/hitos.md`](docs/implementacion-agente-vivo/hitos.md) | Entrada, unidades, DAG, tests, gates y entregables de AV-00…AV-06; leer el hito activo antes de editar |
+| [`docs/implementacion-agente-vivo/contratos.md`](docs/implementacion-agente-vivo/contratos.md) | Flujos, API, inputs/outputs, eventos, identidad, HITL, PII/IPI e invariantes |
+| [`docs/implementacion-agente-vivo/escenarios.md`](docs/implementacion-agente-vivo/escenarios.md) | Perfiles, tools, políticas, guardrails y demos D-01…D-12 con LLM real |
+| [`docs/implementacion-agente-vivo/despliegue.md`](docs/implementacion-agente-vivo/despliegue.md) | Configuración por servicio, límites, inicialización y degradación |
+| [`docs/implementacion-agente-vivo/verificacion.md`](docs/implementacion-agente-vivo/verificacion.md) | Oráculos T-*, runners actuales/futuros, evidencia y checklist de cierre |
+| [`docs/plan-continuacion.md`](docs/plan-continuacion.md) | Hoja de ruta predictiva histórica (Fases 0–6); no es el backlog de la nueva ampliación |
+| [`docs/sessions/`](docs/sessions/) | Evidencia por sesión; consultar las más recientes aplicables, especialmente 0022 y 0023 |
+| [`docs/modulo2-entrega.md`](docs/modulo2-entrega.md) | Entrega académica histórica; sus cifras no sustituyen evidencia reciente |
 
 **Plan normativo de hitos** (NO está en el repo, está en `~/Downloads/`):
 `mvp-plan-argentgob-v0.3-ampliado.md`. Para trabajar un hito, buscar su sección
@@ -33,23 +39,21 @@ hito sin leer su gate.**
   y Fases 1–6 de la capa predictiva (definición analítica, corpus sintético,
   modelado, integración operacional, interfaz y evidencia académica, tests de
   integración de flujos agénticos).
-- **Suite de pruebas:** **312 passed + 7 skipped** (unit + integración; los 7 skipped son de PostgreSQL real sin `TEST_DATABASE_URL`), los cinco sesgos de la Fase 6 quedaron cerrados (`docs/analytics/0004`), el monitoreo de deriva quedó implementado (`docs/sessions/0018`), las políticas declarativas YAML son la fuente única (`docs/sessions/0019`) y la demo end-to-end de 5 escenarios quedó implementada (`docs/sessions/0020`).
-- **Migraciones aplicadas:** 001 → 002 → 003 → 004 → 005 → **006** (head).
-- **Dashboard:** Streamlit con KPIs, decisiones, eventos, distribución por
-  herramienta, sección H8 (consola sanitizada + resolución autorizada) y
-  sección Fase 5 (evidencia predictiva).
+- **Última suite documentada:** **334 passed + 9 skipped**, sesión del 2026-11-09 ([0022](docs/sessions/0022-resumen-rediseno-v4.md)); es evidencia histórica, no una ejecución de esta sesión. Reconfirmar baseline y motivos de skip al iniciar implementación. Deriva, YAML canónico y demo determinista de cinco escenarios ya existen.
+- **Migraciones presentes:** 001 → **007**; última revisión aplicada documentada: `007 (head)` en [consideraciones](docs/PROJECT_CONSIDERATIONS.md). Consultar DB real antes de afirmar revisión aplicada actual.
+- **Dashboard:** cinco vistas multipágina del rediseño v4: Executive Overview, Auditoría y HITL, Inteligencia Predictiva, Salud del Modelo y Operaciones y Demo ([0022](docs/sessions/0022-resumen-rediseno-v4.md)). La demo actual no usa LLM; `--real` significa persistencia en PostgreSQL.
+- **LLM local:** GPU/CDI y E2E financiero real documentados en [0023](docs/sessions/0023-resumen-llama-server-gpu-e2e-agente-real.md). No asumir disponibilidad actual ni que `test_crewai_real.py` invoque llama.cpp: prueba tools CrewAI con proveedor fake.
+- **Todavía propuesto:** API persistente del agente, timeline incremental, cinco dominios públicos, fronteras de resultados PII/IPI y resume interactivo vinculado al worker. No presentar estos elementos del plan v3 como implementados.
 - **E2E H8:** `scripts/e2e_h8_console.py` → 23/23 checks OK.
 - **E2E Fase 4:** `scripts/e2e_fase4_predictive.py` → 6/6 checks OK.
 - **E2E Fase 5:** `scripts/e2e_fase5_evidence.py` → 19/19 checks OK.
-- **Rama de trabajo:** `main` (worktree raíz, posee el modelo GGUF).
+- **Checkout base con GGUF:** raíz del repositorio; consultar `git status`, rama y worktrees al iniciar. Trabajar los cambios en `agents/…`, no asumir que la rama activa es `main`.
 
 ### Próximo hito
 
-La hoja de ruta de [`docs/plan-continuacion.md`](docs/plan-continuacion.md)
-(Fases 0–6) está **completa**. El trabajo pendiente es de prioridad alta y no
-bloqueante: completar criterios de aceptación de H1–H4 y H8–H11, verificar
-HITL end-to-end con el modelo activo, detallar relaciones y cardinalidades en
-la entrega del Módulo 2, y descomponer los sprints en tareas operativas.
+La capa predictiva Fases 0–6 y las mejoras posteriores están documentadas; no volver a tratar los pendientes históricos ya resueltos como backlog nuevo sin contrastar sesiones. La ampliación vigente comienza por **AV-00: baseline operativo y contratos**, según [hitos](docs/implementacion-agente-vivo/hitos.md). AV-00…AV-06 están **pendientes**: redactar documentación no cierra sus gates.
+
+Los IDs AV no sustituyen ni renumeran H1–H16. Ante conflicto, preservar invariantes y plan normativo externo, registrar la decisión y bloquear solo la unidad afectada. No inventar contratos para acomodar nombres de archivos propuestos.
 
 ---
 
@@ -97,8 +101,9 @@ crash-loop. **Siempre levantar el stack desde el worktree raíz (main).**
 
 ## 4. Verificación obligatoria al finalizar cada sesión
 
-Al terminar cualquier sesión de desarrollo, **antes de considerar el trabajo
-completo**, ejecutar en orden:
+Al terminar una sesión con cambios de código/despliegue, **antes de considerar el trabajo completo**, ejecutar en orden los pasos siguientes y el gate específico del [hito activo](docs/implementacion-agente-vivo/hitos.md), con los oráculos de [verificación](docs/implementacion-agente-vivo/verificacion.md).
+
+**Excepción documental:** si solo se modifican Markdown/instrucciones, comprobar enlaces, coherencia de contratos/IDs y diff; no reconstruir imágenes, redeployar ni ejecutar LLM/DB innecesariamente. No declarar gates operativos aprobados por esa validación.
 
 ### 4.1 Reconstruir y redeployar las imágenes
 
@@ -142,7 +147,7 @@ $src = (Get-Location).Path
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/ -q -p no:cacheprovider
 ```
 
-> **Siempre** añadir `-p no:cacheprovider`. Resultado esperado: **312 passed + 7 skipped** (305 + 7 nuevos de la demo end-to-end; PG real se salta sin `TEST_DATABASE_URL`).
+> **Siempre** añadir `-p no:cacheprovider`. Referencia histórica: **334 passed + 9 skipped**; registrar resultado real, no exigir ese número tras agregar tests. Los skips de DB/LLM no satisfacen un gate que requiere integración real. `pytest tests/` incluye unitarias e integración.
 
 ### 4.3 Tests de integración
 
@@ -153,11 +158,7 @@ podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest 
 
 ### 4.4 Validación del corpus (cuando exista)
 
-Cuando la capa predictiva (H12–H16) tenga un corpus analítico construido, se
-debe **agregar la validación del corpus** a la verificación de cierre de sesión:
-correr los tests sobre el corpus (unit + integración + validación de corpus)
-para confirmar el correcto funcionamiento. Hasta que el corpus exista, este
-paso no aplica.
+El corpus ya existe. En cierres de implementación ejecutar su validación con `python scripts/validate_corpus.py` dentro del contenedor, además de los tests aplicables (ver [comandos](docs/implementacion-agente-vivo/verificacion.md)). Cambios de patrones PII pueden afectar features replicadas: preservar schema/manifest y evaluación congelada o versionar explícitamente el cambio.
 
 ### 4.5 E2E del caso (según el hito)
 
@@ -229,7 +230,7 @@ podman run --rm --network argentgob-mvp_default `
   python -m alembic upgrade head
 ```
 
-Verificar cabecera con `python -m alembic current` (estado actual: `006 (head)`).
+Verificar cabecera con `python -m alembic current` en el entorno configurado. Último head documentado: `007`; confirmar aplicado y registrar evidencia, no asumirlo por el contenido del repositorio.
 
 ---
 
@@ -243,10 +244,7 @@ Verificar cabecera con `python -m alembic current` (estado actual: `006 (head)`)
   `main` (o desde la cabecera verificada).
 - El trabajo de la sesión se hace **siempre** en esa rama de trabajo; nunca
   commitear directo sobre `main`.
-- El worktree que mantiene el checkout de `main` es la **raíz del repo**
-  (`plan-implementacion-avancemos`). No se puede `git checkout main` desde otro
-  worktree. El merge a `main` se hace SOLO al cierre de la sesión, después de
-  validar (sección 4):
+- Identificar el worktree que posee `main` con `git worktree list`; los nombres históricos de carpetas no son rutas actuales garantizadas. El GGUF está en el checkout raíz de este equipo. No cambiar `main` desde otro worktree ni copiar el modelo innecesariamente. El merge a `main` se hace SOLO al cierre de implementación, después de validar (sección 4):
   ```powershell
   git -C "<worktree-raiz>" merge --ff-only <branch>
   ```
@@ -322,3 +320,15 @@ git config core.sshCommand 'C:/Windows/System32/OpenSSH/ssh.exe'
   - **INV-16** — el detector produce metadata/finding sin valor y no muta
     `execution_arguments`.
 - Precedencia de decisión: `BLOCK > HITL > PASS`.
+
+## 8. Reglas específicas de la ampliación AV
+
+- Leer [contratos](docs/implementacion-agente-vivo/contratos.md) y el [gate activo](docs/implementacion-agente-vivo/hitos.md) antes de editar. Actualizar pruebas y documentación con cada unidad, no al final de todo el plan.
+- Sanitización de telemetría no equivale a masking operativo ni a minimización del primer prompt/resultados. `USE_TRANSFORMED_ARGUMENTS` actualmente normaliza espacios; no asumir redacción de PII implementada.
+- IPI se controla en contenido recuperado antes de entregarlo al LLM. Lectura PASS y liberación BLOCK son hechos distintos, ambos con evidencia coherente.
+- Nunca mostrar stdout/verbose/prompts/razonamiento como timeline; usar eventos explícitos, acotados y por allowlist.
+- Reutilizar H6/H8 y demostrar revalidación real antes del resume; aprobación no evita guardrails. No repetir `crew.kickoff()` para simular continuidad ni reconstruir hold desde logs.
+- Nuevos dominios: datos/organismos simulados y predictor no validado, sin conectores institucionales reales ni efectos externos. No añadir brokers/colas distribuidas ni cinco frameworks de dominio.
+- Las demos D-01…D-12 exigen llama.cpp real y sus oráculos; los stubs y tests de tools CrewAI no reemplazan esa evidencia. Selectores/runners futuros se crean en su hito, no se consideran disponibles hoy.
+- Cerrar solo con evidencia de tests/PG/LLM requeridos no skipped, imágenes/árbol identificado y [checklist](docs/implementacion-agente-vivo/verificacion.md). Si falta infraestructura, informar BLOCKED, no PASS.
+- No ejecutar pruebas destructivas contra el stack compartido; usar DB/copias/proyecto aislados. Nunca `down -v` sobre datos vigentes ni imprimir secretos.

@@ -580,7 +580,8 @@ dominios, congelado, anti-circularidad).
 
 ## 11. Documentos relacionados
 
-- [Plan de continuación (hoja de ruta predictiva)](plan-continuacion.md)
+- **[Plan v3 de agente en vivo y escenarios públicos](implementacion-agente-vivo/README.md)** — hoja de ruta de la nueva ampliación AV-00…AV-06, todavía pendiente. Incluye contratos, perfiles/guardrails, configuración, demos con LLM real y tests/gates por hito. Las cifras anteriores son resultados históricos; esta incorporación documental no vuelve a ejecutar ni certifica sus pruebas.
+- [Plan de continuación (hoja de ruta predictiva histórica)](plan-continuacion.md)
 - [Entrega del Módulo 2 (documentación técnica e ingeniería)](modulo2-entrega.md)
 - [Resúmenes de sesión por hito](sessions/)
 - [Arquitectura y evidencia de la capa predictiva](analytics/0003-arquitectura-y-evidencia.md)
