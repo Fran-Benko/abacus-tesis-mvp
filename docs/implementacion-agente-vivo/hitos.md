@@ -1,6 +1,6 @@
 # Hitos operativos y gates — v3
 
-Estado inicial: **todos pendientes**. Los nombres técnicos son objetivos, no prueba de existencia. [Contratos](contratos.md), [catálogo](escenarios.md), [despliegue](despliegue.md) y [pruebas](verificacion.md) son lectura aplicable obligatoria.
+Estado inicial: **AV-00 completo; AV-01…AV-06 pendientes**. Los nombres técnicos son objetivos, no prueba de existencia. [Contratos](contratos.md), [catálogo](escenarios.md), [despliegue](despliegue.md) y [pruebas](verificacion.md) son lectura aplicable obligatoria.
 
 ## 1. Dependencias y orden
 
@@ -34,6 +34,8 @@ AV-04 requiere el contrato/callback de AV-01, no necesita esperar a toda la UI. 
 **Pruebas:** T-R01, T-R02 baseline, T-R04; smoke llama.cpp real para identificar versión/modelo; inspección/ejecución mínima de roles/DB según preflight. No ejecutar pruebas de nuevas rutas inexistentes.
 
 **Gate G-AV-00:** baseline reproducible con resultados/limitaciones registrados; mapa de rutas y decisiones de contrato sin bloqueos para AV-01; oráculos y prerequisitos de AV-02/04/05 definidos. Si no hay DB/LLM para los chequeos exigidos, estado BLOCKED, no inferir disponibilidad.
+
+**Estado: PASS (2026-11-10).** Evidencia en [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md): suite 334 passed + 9 skipped, PG real 7/7, corpus OK, E2E Fase 4 6/6, Fase 5 19/19, H8 23/23 sobre DB limpia, cadena íntegra, demo determinista 5 escenarios y smoke LLM real. Seis brechas verificadas quedan como prerequisito de AV-02/04/05 (seed ausente, revalidación incompleta en resume, cadena no cableada, sin correlación de run, sin persistencia de contenido, identidad HITL sin configurar).
 
 **Entregables:** resumen de baseline en sesión, decisiones breves dentro de los documentos aplicables, tabla de tests existentes/reutilizables y comandos exactos disponibles. Esta documentación inicial no reemplaza esos resultados.
 
@@ -149,4 +151,4 @@ AV-04 requiere el contrato/callback de AV-01, no necesita esperar a toda la UI. 
 
 Cada gate registra comandos, exit codes, árbol/imagen/configuración, tests descubiertos y ejecutados, resultados, limitaciones e IDs seguros según [verificación](verificacion.md). Una unidad puede quedar validada aunque otro hito siga bloqueado, pero no elimina dependencias del DAG. No declarar un AV completo por tener sus tablas o documentos.
 
-**Esta sesión entrega el plan y actualiza instrucciones.** No implementa AV-01…06 ni ejecuta G-AV-00. Para documentación sola se validan enlaces, coherencia y diff; no rebuild, LLM, migración ni redeploy innecesarios.
+**Esta sesión entrega el plan y actualiza instrucciones.** No implementa AV-01…06. AV-00 se ejecutó y cerró en la [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md); para documentación sola se validan enlaces, coherencia y diff, sin rebuild, LLM, migración ni redeploy innecesarios.

@@ -39,7 +39,7 @@ hito sin leer su gate.**
   y Fases 1–6 de la capa predictiva (definición analítica, corpus sintético,
   modelado, integración operacional, interfaz y evidencia académica, tests de
   integración de flujos agénticos).
-- **Última suite documentada:** **334 passed + 9 skipped**, sesión del 2026-11-09 ([0022](docs/sessions/0022-resumen-rediseno-v4.md)); es evidencia histórica, no una ejecución de esta sesión. Reconfirmar baseline y motivos de skip al iniciar implementación. Deriva, YAML canónico y demo determinista de cinco escenarios ya existen.
+- **Última suite documentada:** **334 passed + 9 skipped**, reconfirmada el 2026-11-10 en AV-00 ([0025](docs/sessions/0025-resumen-av-00-baseline-contratos.md)); los 9 skips son 7 de `test_postgres_real.py` (sin `TEST_DATABASE_URL`) y 2 de `test_dashboard_apptest.py` (sin `DATABASE_URL`). Deriva, modelo canónico y demo determinista de cinco escenarios están verificados.
 - **Migraciones presentes:** 001 → **007**; última revisión aplicada documentada: `007 (head)` en [consideraciones](docs/PROJECT_CONSIDERATIONS.md). Consultar DB real antes de afirmar revisión aplicada actual.
 - **Dashboard:** cinco vistas multipágina del rediseño v4: Executive Overview, Auditoría y HITL, Inteligencia Predictiva, Salud del Modelo y Operaciones y Demo ([0022](docs/sessions/0022-resumen-rediseno-v4.md)). La demo actual no usa LLM; `--real` significa persistencia en PostgreSQL.
 - **LLM local:** GPU/CDI y E2E financiero real documentados en [0023](docs/sessions/0023-resumen-llama-server-gpu-e2e-agente-real.md). No asumir disponibilidad actual ni que `test_crewai_real.py` invoque llama.cpp: prueba tools CrewAI con proveedor fake.
@@ -51,7 +51,9 @@ hito sin leer su gate.**
 
 ### Próximo hito
 
-La capa predictiva Fases 0–6 y las mejoras posteriores están documentadas; no volver a tratar los pendientes históricos ya resueltos como backlog nuevo sin contrastar sesiones. La ampliación vigente comienza por **AV-00: baseline operativo y contratos**, según [hitos](docs/implementacion-agente-vivo/hitos.md). AV-00…AV-06 están **pendientes**: redactar documentación no cierra sus gates.
+La capa predictiva Fases 0–6 y las mejoras posteriores están documentadas; no volver a tratar los pendientes históricos ya resueltos como backlog nuevo sin contrastar sesiones. **AV-00 (baseline operativo y contratos) está completo con gate PASS** ([0025](docs/sessions/0025-resumen-av-00-baseline-contratos.md)). El próximo hito es **AV-01: servicio HTTP, supervisor y eventos**, según [hitos](docs/implementacion-agente-vivo/hitos.md). AV-01…AV-06 están **pendientes**: redactar documentación no cierra sus gates.
+
+Brechas verificadas en AV-00 que condicionan hitos posteriores (no presentarlas como resueltas): el inicializador no siembra políticas (AV-02), `GovernedResumeService._revalidate` no revalida política/digest/guardrails (AV-05), `AuditChainAppender` no está cableado al runtime (AV-05), no hay correlación de run (AV-01), no hay persistencia de liberación de contenido (AV-04) y la identidad HITL no está configurada en el despliegue (AV-02). Detalle en [0025](docs/sessions/0025-resumen-av-00-baseline-contratos.md).
 
 Los IDs AV no sustituyen ni renumeran H1–H16. Ante conflicto, preservar invariantes y plan normativo externo, registrar la decisión y bloquear solo la unidad afectada. No inventar contratos para acomodar nombres de archivos propuestos.
 

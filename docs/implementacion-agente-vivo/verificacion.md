@@ -159,3 +159,24 @@ El gate agregado genera PASS únicamente si todas las postcondiciones obligatori
 ## 5. Validación de esta entrega documental
 
 No requiere rebuild de imágenes ni tests de aplicación. Sí: enlaces relativos existentes, nomenclatura AV y T/D consistente, todos los hitos con entrada/unidades/tests/gate/entregables, inexistencia de cambios en src/tests/compose/dependencias y comandos futuros etiquetados. El resultado de esta revisión documental no debe marcar AV-00 ni ningún gate de software como PASS.
+
+## 6. Baseline medido en AV-00 (2026-11-10)
+
+Ejecutado sobre el árbol `f81bd7d` con las imágenes del cierre anterior. Registro completo en [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md).
+
+| Verificación | Resultado real | Nota |
+|---|---|---|
+| `pytest tests/` | **334 passed, 9 skipped** | Los 9 skips son los mismos de la referencia histórica: 7 de `test_postgres_real.py` sin `TEST_DATABASE_URL` y 2 de `test_dashboard_apptest.py` sin `DATABASE_URL` |
+| `pytest tests/integration/test_postgres_real.py` con `TEST_DATABASE_URL` | 7 passed | Requiere DB de prueba dedicada |
+| `scripts/validate_corpus.py` | `RESULTADO: OK` | 3000 filas, freeze hash OK |
+| `scripts/e2e_fase4_predictive.py` | 6 passed, 0 failed | |
+| `scripts/e2e_fase5_evidence.py` | 19 passed, 0 failed | |
+| `scripts/e2e_h8_console.py` (DB compartida) | 22 passed, 1 failed | Acumulación de 25 approvals PENDING; ver abajo |
+| `scripts/e2e_h8_console.py` (DB limpia) | 23 passed, 0 failed | Evidencia válida del gate |
+| `python -m argentgob.audit.cli` | `OK: la cadena de auditoría es íntegra.` | Verifica 1 fila; no acredita encadenado del runtime |
+| `scripts/demo_end_to_end.py` | 5 escenarios OK/BLOCK/HITL | Sin LLM |
+| `python -m argentgob.agent.main AAPL --profile analyst` | Inferencia real + tools | Requiere políticas sembradas |
+
+**Regla derivada:** la evidencia de gate debe ejecutarse sobre una DB de prueba aislada y migrada, no sobre la DB compartida del dashboard. `pending_approvals` ordena por `argued_at ASC` con `limit` acotado, por lo que datos acumulados desplazan la fila recién creada y producen un falso fallo. Crear la DB de prueba, migrarla y sembrar políticas es parte del preflight del gate, no un paso opcional.
+
+**Regla derivada:** un smoke LLM real sobre una DB recién migrada sin `seed_policies` produce `BLOCK`/`NO_POLICY_MATCHED` en todas las tools. Eso es fail-closed correcto, pero no acredita el flujo PASS/HITL. El gate debe verificar `governance_policies > 0` antes de interpretar el resultado del smoke.

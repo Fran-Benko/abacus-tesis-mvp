@@ -133,6 +133,14 @@ Un run ocupa el cupo también en WAITING_APPROVAL. Cada run tiene contador, midd
 
 En la ruta actual, HITL puede elevarse antes de recorrer guardrails. AV-05 debe demostrar que controles duros no se omiten tras aprobación, con ajuste mínimo de esa ruta y regresión de precedencia. Un token válido no autoriza un payload que ahora debe bloquearse.
 
+### 5.1 Estado verificado en AV-00 (2026-11-10)
+
+`GovernedResumeService._revalidate` valida **solo** `approval.state == APPROVED` y las expiraciones de approval y token. No revalida política vigente, `policy_version`/`policy_digest` ni guardrails, pese a lo que afirma su docstring. El `argument_digest` se contrasta en `_require_hold` únicamente entre el hold y la aprobación, no contra la decisión persistida.
+
+Consecuencia verificada: una aprobación válida permite ejecutar aunque la política haya cambiado o un control duro deba bloquear. AV-05 debe implementar la revalidación efectiva **antes** de consumir el token y probarla cambiando la política entre aprobación y resume (T-H06). El docstring no es evidencia.
+
+Además, `AuditChainAppender` no está cableado al runtime: solo lo instancian tests. En la DB del stack hay 74 `policy_decisions` y 1 fila en `audit_chain` (de un E2E H7 manual), por lo que `audit.cli` no acredita que un run real quede encadenado. AV-05 debe integrar el append en la frontera de decisión (T-D01).
+
 ## 6. Salidas por dominio
 
 Sobre común seguro: `summary`, `evidence_refs`, `limitations`, `domain_status`. La lista de campos se cierra por escenario; no aceptar objetos arbitrarios generados por el LLM. Validador comprueba referencias contra lo realmente recuperado y no persiste salida no validada.

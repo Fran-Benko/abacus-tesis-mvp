@@ -76,3 +76,16 @@ Base nueva, upgrade, pérdida de red y manipulación de evidencia se prueban en 
 No usar `down -v` sobre el proyecto vigente, no rotar secretos ni tocar la cadena real. Respaldar/verificar DB de prueba antes de una migración nueva. Si se necesita una ampliación mínima para controles de contenido/correlación, documentar upgrade/compatibilidad/restore; no prometer downgrade destructivo. Rollback de imagen no hace compatibles datos si se cambió contrato: bloquear admisión hasta restaurar compatibilidad verificada.
 
 Cierre AV-02: pruebas T-A01…T-A08 y smoke de imagen. Cierre AV-06: repetir sobre la configuración final sin redacciones manuales que oculten fallos.
+
+## 6. Estado verificado en AV-00 (2026-11-10)
+
+Estas comprobaciones se hicieron sobre el árbol `f81bd7d` y condicionan AV-02. No son propuestas: son brechas medidas.
+
+| Comprobación | Resultado real | Acción exigida en AV-02 |
+|---|---|---|
+| `migrator` en `compose.yaml` | Ejecuta solo `python -m alembic upgrade head`; **no** invoca `scripts/seed_policies.py`. DB nueva → 0 filas en `governance_policies`; smoke LLM real → 30 `BLOCK`/`NO_POLICY_MATCHED`. Tras seed manual (8 políticas) → `PASS`/`HITL` reales. | Inicializador = upgrade **y** seed, con exit ≠ 0 propagado. T-A01 verifica `governance_policies > 0`. |
+| Identidad HITL en el despliegue | `identity_fixture_roles={}` y `authorized_auditor_roles=[]` en `.env` y en el contenedor del dashboard; `ResolutionService` responde `blocked/not_authorized`. | Declarar ambas variables por entorno (fixture solo DEV), sin valores productivos. T-B03/T-H02 prueban la configuración real del stack. |
+| Rol de runtime | `argentgob_app` es `rolsuper=t`, `rolcreatedb=t`, `rolcreaterole=t`. Los roles de consola son `NOLOGIN` con grants mínimos. | Separar rol de runtime del de migración; T-A08 verifica mínimo privilegio. |
+| Artefactos del predictor en la imagen | `RiskPredictor()` dentro de la imagen reporta `available=False` (`/app/data/models/risk_model_v1` no existe): el Containerfile no copia `data/`. | Montar `data/` RO en el agente y exponer versión/digest; T-A07. |
+| Límites de payload | `max_json_depth`, `max_json_nodes`, `privacy_scan_timeout_ms` y `agent_profile` no se usan fuera de `config.py`. Solo `max_payload_bytes`, `max_string_bytes` y `rate_limit_calls_per_run` tienen efecto. | Aplicarlos en la validación de admisión (T-B01) o retirarlos; no documentarlos como activos. |
+| E2E H8 sobre DB compartida | 22/23: `pending_approvals(limit=10)` ordena `argued_at ASC` y la DB acumula 25 PENDING. Sobre DB limpia: 23/23. | La evidencia de gate debe correr sobre DB de prueba aislada, no sobre la compartida. |

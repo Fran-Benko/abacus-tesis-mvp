@@ -296,8 +296,18 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
   calibración, demo ejecutable desde la UI. Suite completa **334 passed + 9
   skipped**. Merge a `main` en `e923f8d`.
 - Estado del repositorio: ver §8 (Relevamiento del repositorio).
-- Próximo hito: **ninguno pendiente de desarrollo en el plan vigente**; el
-  trabajo restante es de consolidación documental de la tesis (ver §7 Límites).
+- **AV-00 — Baseline operativo y contratos: completo (PASS)** — verificado el
+  2026-11-10 sobre `f81bd7d`: suite **334 passed + 9 skipped**, PG real 7/7,
+  corpus OK, E2E Fase 4 6/6, Fase 5 19/19, H8 23/23 sobre DB limpia, cadena de
+  auditoría íntegra, demo determinista 5 escenarios y smoke LLM real con
+  inferencia y tools. Se mapearon los contratos a rutas reales y se registraron
+  seis brechas que condicionan AV-02/04/05 (seed ausente en el inicializador,
+  revalidación incompleta en resume, cadena de auditoría no cableada, sin
+  correlación de run, sin persistencia de liberación de contenido e identidad
+  HITL sin configurar). Detalle en
+  [sesión 0025](sessions/0025-resumen-av-00-baseline-contratos.md).
+- Próximo hito: **AV-01 — Servicio HTTP, supervisor y eventos** (ver
+  [hitos](implementacion-agente-vivo/hitos.md)). AV-01…AV-06 siguen pendientes.
 
 ---
 
@@ -419,7 +429,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 | Verificación | Resultado |
 |---|---|
 | `pytest tests/` (suite completa, imagen reconstruida) | **334 passed + 9 skipped** |
-| E2E H8 (`scripts/e2e_h8_console.py`) | 23/23 checks OK |
+| E2E H8 (`scripts/e2e_h8_console.py`) | 23/23 checks OK (sobre DB de prueba limpia; 22/23 sobre la DB compartida por acumulación de approvals PENDING) |
 | E2E Fase 4 (`scripts/e2e_fase4_predictive.py`) | 6/6 checks OK |
 | E2E Fase 5 (`scripts/e2e_fase5_evidence.py`) | 19/19 checks OK |
 | Demo end-to-end (`scripts/demo_end_to_end.py`, 5 escenarios) | OK / BLOCK (`PREDICTED_HIGH_RISK`, `INJECTION_PATTERN_DETECTED`, `SENSITIVITY_EXCEEDED`) / HITL COMPLETO |
