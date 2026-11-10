@@ -32,3 +32,6 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# Documentos TFG (entregables con datos personales; no se suben al repo)
+docs/TFG/
