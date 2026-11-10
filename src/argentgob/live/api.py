@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
+from argentgob.live.readiness import StackReadiness
 from argentgob.live.schemas import (
     HealthResponse,
     ReadyResponse,
@@ -41,6 +42,11 @@ MAX_BODY_BYTES = 65536
 
 def _service_token() -> str | None:
     """Token de servicio esperado (vacío = sin autenticación, solo LOCAL/TEST)."""
+    from argentgob.db.dsn import read_secret_file
+
+    from_file = read_secret_file(os.environ.get("AGENT_API_SERVICE_TOKEN_FILE"))
+    if from_file is not None:
+        return from_file
     return os.environ.get("AGENT_API_SERVICE_TOKEN") or None
 
 
@@ -48,7 +54,10 @@ def _environment() -> str:
     return (os.environ.get("ENVIRONMENT") or "LOCAL").upper()
 
 
-def create_app(supervisor: RunSupervisor | None = None) -> FastAPI:
+def create_app(
+    supervisor: RunSupervisor | None = None,
+    readiness: StackReadiness | None = None,
+) -> FastAPI:
     """Construye la app ASGI con el supervisor inyectado o uno por defecto."""
     from contextlib import asynccontextmanager
 
@@ -66,6 +75,7 @@ def create_app(supervisor: RunSupervisor | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.supervisor = supervisor or RunSupervisor()
+    app.state.readiness = readiness or StackReadiness()
 
     def _require_actor(actor_header: str | None, token_header: str | None) -> str:
         expected = _service_token()
@@ -109,13 +119,21 @@ def create_app(supervisor: RunSupervisor | None = None) -> FastAPI:
 
     @app.get("/ready", response_model=ReadyResponse)
     def ready() -> ReadyResponse:
-        """Readiness: configuración mínima y capacidades informadas aparte."""
+        """Readiness del stack: esquema, catalogo y capacidades separadas.
+
+        AV-02: `ready` exige DB alcanzable, esquema en head y catalogo
+        sembrado; un inicializador fallido deja el servicio en 503 al admitir
+        runs. El cupo ocupado y el LLM se informan como capacidades, no como
+        proceso roto.
+        """
+        stack = app.state.readiness.check()
         checks = {
             "service_token_configured": _service_token() is not None
             or _environment() in ("LOCAL", "TEST", "DEV", "DEVELOPMENT"),
+            **stack.checks,
         }
         capabilities = {
-            "llm_base_configured": bool(os.environ.get("OPENAI_API_BASE")),
+            **stack.capabilities,
             "capacity_free": app.state.supervisor.active_run_id is None,
         }
         return ReadyResponse(
@@ -123,6 +141,7 @@ def create_app(supervisor: RunSupervisor | None = None) -> FastAPI:
             checks=checks,
             capabilities=capabilities,
             active_run=app.state.supervisor.active_run_id is not None,
+            detail=stack.detail,
         )
 
     @app.post("/runs", status_code=202, response_model=RunAcceptedResponse)
@@ -133,6 +152,14 @@ def create_app(supervisor: RunSupervisor | None = None) -> FastAPI:
     ) -> RunAcceptedResponse:
         """Admite un run validado; cero inferencias si la entrada es inválida."""
         actor_id = _require_actor(actor_header, token_header)
+        stack = app.state.readiness.check()
+        if not stack.ready:
+            # Inicializador fallido o esquema incompleto: no admitir trabajo.
+            raise HTTPException(status_code=503, detail="stack no inicializado")
+        if not stack.capabilities.get("llm_reachable", True):
+            # Sin LLM el servicio sigue diagnosticando, pero no admite runs
+            # que lo requieran (contrato 4, AV-02).
+            raise HTTPException(status_code=503, detail="LLM no disponible")
         input_payload = payload.input.model_dump(exclude_none=True)
         try:
             record, _created = app.state.supervisor.submit(

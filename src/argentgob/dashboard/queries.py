@@ -27,7 +27,17 @@ def _normalize_db_url(url: str) -> str:
     return url
 
 
-DATABASE_URL = _normalize_db_url(os.environ.get("DATABASE_URL", ""))
+def _resolve_url() -> str:
+    """DSN del dashboard: secreto de solo lectura o `DATABASE_URL` (AV-02)."""
+    from argentgob.db.dsn import resolve_database_url
+
+    try:
+        return _normalize_db_url(resolve_database_url(role="dashboard"))
+    except RuntimeError:
+        return _normalize_db_url(os.environ.get("DATABASE_URL", ""))
+
+
+DATABASE_URL = _resolve_url()
 
 
 def get_connection():

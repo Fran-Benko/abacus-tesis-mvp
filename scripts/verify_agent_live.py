@@ -34,11 +34,22 @@ MILESTONE_SELECTORS: dict[str, list[str]] = {
         "tests/unit/test_logger.py",
         "tests/integration/test_crewai_real.py",
     ],
+    "AV-02": [
+        "tests/unit/test_av02_stack.py",
+        "tests/unit/test_agent_server.py",
+        "tests/unit/test_run_supervisor.py",
+        "tests/unit/test_run_events.py",
+        "tests/unit/test_pep.py",
+        "tests/unit/test_guardrails.py",
+        "tests/integration/test_agent_live_flow.py",
+        "tests/integration/test_policy_seed_declarativo.py",
+    ],
 }
 
 # Pruebas que exigen llama.cpp real (opt-in explícito).
 LLM_SELECTORS: dict[str, list[str]] = {
     "AV-01": ["tests/integration/test_agent_live_llm.py"],
+    "AV-02": ["tests/integration/test_agent_live_llm.py"],
 }
 
 
@@ -54,7 +65,7 @@ def _run_pytest(selectors: list[str], *, extra_args: list[str] | None = None) ->
         "no:cacheprovider",
         *(extra_args or []),
     ]
-    completed = subprocess.run(  # noqa: S603 - comando fijo, sin shell
+    completed = subprocess.run(
         command,
         cwd=str(ROOT),
         capture_output=True,
@@ -71,7 +82,7 @@ def _run_pytest(selectors: list[str], *, extra_args: list[str] | None = None) ->
 
 def _collect_only(selectors: list[str]) -> int:
     """Cuenta los tests descubiertos; 0 significa selector vacío o roto."""
-    completed = subprocess.run(  # noqa: S603 - comando fijo, sin shell
+    completed = subprocess.run(
         [sys.executable, "-m", "pytest", *selectors, "--collect-only", "-q",
          "-p", "no:cacheprovider"],
         cwd=str(ROOT),
@@ -96,6 +107,8 @@ def _preflight() -> dict[str, bool]:
         "fastapi_importable": _module_available("fastapi"),
         "llm_base_configured": bool(os.environ.get("OPENAI_API_BASE")),
         "database_configured": bool(os.environ.get("DATABASE_URL")),
+        "init_module_present": (ROOT / "src" / "argentgob" / "db" / "init.py").is_file(),
+        "compose_present": (ROOT / "compose.yaml").is_file(),
     }
 
 

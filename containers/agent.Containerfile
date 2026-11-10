@@ -30,11 +30,21 @@ COPY policies/ ./policies/
 COPY scripts/ ./scripts/
 COPY alembic.ini ./
 COPY tests/ ./tests/
+# AV-02 (T-A07): artefactos del predictor y corpus congelado dentro de la
+# imagen, de modo que un contenedor sin bind mount de fuentes siga teniendo
+# `RiskPredictor.available=True` y evidencia academica reproducible.
+COPY data/ ./data/
 
 # Cambiar propietario
 RUN chown -R argentgob:argentgob /app
 
 USER argentgob
 
-# Por defecto: ejecutar el agente
-CMD ["python", "-m", "argentgob.agent.main"]
+# AV-02: la imagen sirve la API interna de runs por defecto. La CLI financiera
+# sigue disponible con `python -m argentgob.agent.main <ticker> --profile ...`.
+ENV RISK_MODEL_DIR=/app/data/models/risk_model_v1
+ENV RISK_CORPUS_PATH=/app/data/corpus/corpus_v1.parquet
+
+EXPOSE 8090
+
+CMD ["python", "-m", "argentgob.live.server"]

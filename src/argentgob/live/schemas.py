@@ -123,6 +123,7 @@ class ReadyResponse(BaseModel):
     checks: dict[str, bool]
     capabilities: dict[str, bool]
     active_run: bool
+    detail: dict[str, Any] = Field(default_factory=dict)
 
 
 def validate_actor_id(actor_id: str | None) -> str:

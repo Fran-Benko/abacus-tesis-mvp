@@ -12,9 +12,29 @@ import pytest
 from fastapi.testclient import TestClient
 
 from argentgob.live.api import create_app
+from argentgob.live.readiness import ReadinessReport
 from argentgob.live.supervisor import RunSupervisor
 
 ACTOR = {"x-argentgob-actor": "auditor-1"}
+
+
+class _ReadyStack:
+    """Readiness de prueba: stack inicializado, sin tocar PostgreSQL (AV-02)."""
+
+    def check(self, *, force: bool = False) -> ReadinessReport:
+        return ReadinessReport(
+            ready=True,
+            checks={"db_reachable": True, "schema_en_head": True, "catalogo_sembrado": True},
+            capabilities={
+                "llm_base_configured": True,
+                "llm_reachable": True,
+                "predictor_artifacts_present": True,
+            },
+            detail={"revision": "008", "policies": 8},
+        )
+
+    def invalidate(self) -> None:
+        return None
 
 
 class _FakeHandle:
@@ -93,7 +113,7 @@ def client(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "TEST")
     monkeypatch.delenv("AGENT_API_SERVICE_TOKEN", raising=False)
     supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
-    app = create_app(supervisor)
+    app = create_app(supervisor, readiness=_ReadyStack())
     with TestClient(app) as test_client:
         yield test_client
     supervisor.shutdown()
@@ -223,7 +243,7 @@ def test_token_de_servicio_requerido_cuando_esta_configurado(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "TEST")
     monkeypatch.setenv("AGENT_API_SERVICE_TOKEN", "secreto-de-prueba")
     supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
-    app = create_app(supervisor)
+    app = create_app(supervisor, readiness=_ReadyStack())
     with TestClient(app) as test_client:
         assert test_client.post("/runs", json=_payload(), headers=ACTOR).status_code == 401
         ok = test_client.post(
@@ -232,4 +252,65 @@ def test_token_de_servicio_requerido_cuando_esta_configurado(monkeypatch):
             headers={**ACTOR, "x-argentgob-service-token": "secreto-de-prueba"},
         )
         assert ok.status_code == 202
+    supervisor.shutdown()
+
+
+class _NotReadyStack(_ReadyStack):
+    """Readiness de prueba: inicializador fallido (AV-02, T-A04)."""
+
+    def check(self, *, force: bool = False) -> ReadinessReport:
+        return ReadinessReport(
+            ready=False,
+            checks={"db_reachable": True, "schema_en_head": False, "catalogo_sembrado": False},
+            capabilities={
+                "llm_base_configured": True,
+                "llm_reachable": True,
+                "predictor_artifacts_present": True,
+            },
+            detail={"revision": "007", "policies": 0},
+        )
+
+
+def test_stack_no_inicializado_no_admite_runs(monkeypatch):
+    """Sin esquema/cat?logo, /ready es False y POST /runs responde 503."""
+    monkeypatch.setenv("ENVIRONMENT", "TEST")
+    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN", raising=False)
+    supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
+    app = create_app(supervisor, readiness=_NotReadyStack())
+    with TestClient(app) as test_client:
+        ready = test_client.get("/ready").json()
+        assert ready["ready"] is False
+        assert ready["checks"]["catalogo_sembrado"] is False
+        assert test_client.post("/runs", json=_payload(), headers=ACTOR).status_code == 503
+    supervisor.shutdown()
+
+
+class _NoLlmStack(_ReadyStack):
+    """Readiness de prueba: stack listo pero LLM ausente (AV-02, T-A06)."""
+
+    def check(self, *, force: bool = False) -> ReadinessReport:
+        return ReadinessReport(
+            ready=True,
+            checks={"db_reachable": True, "schema_en_head": True, "catalogo_sembrado": True},
+            capabilities={
+                "llm_base_configured": True,
+                "llm_reachable": False,
+                "predictor_artifacts_present": True,
+            },
+            detail={"revision": "008", "policies": 8},
+        )
+
+
+def test_sin_llm_no_admite_runs_pero_sigue_diagnosticando(monkeypatch):
+    """Sin LLM: /health y /ready responden; POST /runs responde 503."""
+    monkeypatch.setenv("ENVIRONMENT", "TEST")
+    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN", raising=False)
+    supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
+    app = create_app(supervisor, readiness=_NoLlmStack())
+    with TestClient(app) as test_client:
+        assert test_client.get("/health").status_code == 200
+        ready = test_client.get("/ready").json()
+        assert ready["ready"] is True
+        assert ready["capabilities"]["llm_reachable"] is False
+        assert test_client.post("/runs", json=_payload(), headers=ACTOR).status_code == 503
     supervisor.shutdown()

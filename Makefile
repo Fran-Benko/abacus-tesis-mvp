@@ -9,15 +9,19 @@ setup:
 	chmod 700 .secrets
 	@[ -f .secrets/postgres_password ] || printf '%s' "dev-password-local" > .secrets/postgres_password
 	chmod 600 .secrets/postgres_password
+	python scripts/init_secrets.py
 	bash scripts/download_model.sh
 	@echo "Setup completo. Edita .env si necesitas ajustar configuracion."
 
-## Levantar el stack completo (excepto agente)
+## Levantar el stack completo (inicializador obligatorio + servicios)
 start:
-	podman compose up -d postgres llama-server
-	@echo "Esperando healthchecks..."
-	podman compose run --rm migrator
-	@echo "Stack listo. Ejecuta 'make agent' para iniciar el analisis."
+	python scripts/preflight_stack.py
+	podman compose up -d
+	@echo "Stack listo. API interna en http://agent:8090 (sin publicar al host)."
+
+## Verificar el gate de inicializacion/topologia (AV-02)
+verify-stack:
+	python scripts/verify_stack_av02.py
 
 ## Ejecutar el agente (interactivo)
 agent:

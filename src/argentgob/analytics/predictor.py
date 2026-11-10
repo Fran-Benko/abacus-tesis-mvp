@@ -35,6 +35,19 @@ DEFAULT_MODEL_DIR = (
 )
 
 
+def resolve_model_dir() -> Path:
+    """Directorio de artefactos del predictor (AV-02).
+
+    `RISK_MODEL_DIR` permite montar los artefactos RO en la imagen sin depender
+    del layout del repositorio; nunca se acepta una ruta suministrada por el
+    cliente de la API.
+    """
+    import os
+
+    configured = os.environ.get("RISK_MODEL_DIR")
+    return Path(configured) if configured else DEFAULT_MODEL_DIR
+
+
 @dataclass
 class RiskPrediction:
     """Resultado de la inferencia predictiva."""
@@ -52,7 +65,7 @@ class RiskPredictor:
     """Carga el pipeline y predice el riesgo de una tool call."""
 
     def __init__(self, model_dir: Path | str | None = None):
-        self.model_dir = Path(model_dir) if model_dir else DEFAULT_MODEL_DIR
+        self.model_dir = Path(model_dir) if model_dir else resolve_model_dir()
         self._pipeline: Any = None
         self._threshold: float = 0.3
         self._default_class: str = "LOW"

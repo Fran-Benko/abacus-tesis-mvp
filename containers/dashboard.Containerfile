@@ -25,10 +25,15 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY policies/ ./policies/
+# AV-02 (T-A07): artefactos y corpus dentro de la imagen (sin bind mount).
+COPY data/ ./data/
 
 RUN chown -R argentgob:argentgob /app
 
 USER argentgob
+
+ENV RISK_MODEL_DIR=/app/data/models/risk_model_v1
+ENV RISK_CORPUS_PATH=/app/data/corpus/corpus_v1.parquet
 
 EXPOSE 8501
 

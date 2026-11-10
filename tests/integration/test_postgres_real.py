@@ -60,12 +60,12 @@ def pg_conn():
 
 @requires_pg
 def test_migraciones_en_head(pg_conn):
-    """Las migraciones estan aplicadas hasta 007 (head)."""
+    """Las migraciones estan aplicadas hasta 010 (head)."""
     with pg_conn.cursor() as cur:
         cur.execute("SELECT version_num FROM alembic_version")
         row = cur.fetchone()
     assert row is not None, "alembic_version no existe"
-    assert row[0] == "007", f"head esperado 007, got {row[0]}"
+    assert row[0] == "010", f"head esperado 010, got {row[0]}"
 
 
 @requires_pg

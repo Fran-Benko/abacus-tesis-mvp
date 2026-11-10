@@ -1,6 +1,6 @@
 # Hitos operativos y gates — v3
 
-Estado inicial: **AV-00 y AV-01 completos; AV-02…AV-06 pendientes**. Los nombres técnicos son objetivos, no prueba de existencia. [Contratos](contratos.md), [catálogo](escenarios.md), [despliegue](despliegue.md) y [pruebas](verificacion.md) son lectura aplicable obligatoria.
+Estado inicial: **AV-00, AV-01 y AV-02 completos; AV-03…AV-06 pendientes**. Los nombres técnicos son objetivos, no prueba de existencia. [Contratos](contratos.md), [catálogo](escenarios.md), [despliegue](despliegue.md) y [pruebas](verificacion.md) son lectura aplicable obligatoria.
 
 ## 1. Dependencias y orden
 
@@ -78,6 +78,10 @@ AV-04 requiere el contrato/callback de AV-01, no necesita esperar a toda la UI. 
 **Gate G-AV-02:** inicializador exit 0 y postcondiciones verificadas, stack saludable con precondiciones cumplidas, arranque repetible sin pérdida de datos; sin LLM la UI/auditoría siguen y no se aceptan runs LLM. Puertos/roles/secreto y artefactos reales funcionan. Fallo de migrator/seed impide admisión.
 
 **Entregables:** compose/entrypoint mínimo si hace falta, config validada, pruebas de arranque, documentación de operación/preflight/rollback y evidencia segura de imagen.
+
+**Estado: PASS (2026-11-10).** Evidencia en [sesión 0027](../sessions/0027-resumen-av-02-compose-inicializacion.md). Implementado: inicializador único `python -m argentgob.db.init` (Alembic + provisión de roles + seed canónico + verificación de postcondiciones, exit != 0 propagado), `argentgob.db.dsn` (DSN desde archivo de secreto con escape de credenciales), `argentgob.live.readiness` (`/ready` exige esquema en head y catálogo sembrado; `POST /runs` responde 503 sin inicializar o sin LLM), migraciones `008`–`010` (roles `argentgob_runtime`/`argentgob_dashboard` con mínimo privilegio, CONNECT y lectura de `alembic_version`), `compose.yaml` con `agent` como API persistente sin stdin/tty ni puertos publicados, `migrator` obligatorio vía `service_completed_successfully`, secretos por consumidor, llama.cpp fijado por digest y GGUF parametrizado RO, `data/` copiado en ambas imágenes, `scripts/preflight_stack.py`, `scripts/init_secrets.py` y `scripts/verify_stack_av02.py`. Gate `scripts/verify_stack_av02.py`: **24 passed, 0 failed** sobre PostgreSQL real (base nueva, segundo arranque, base existente, fallo de seed, roles y contraseña con caracteres reservados). Gate `scripts/verify_agent_live.py --milestone AV-02 --with-llm`: 96 tests + 1 smoke LLM real, PASS. Regresión: suite 428 passed + 10 skipped, PG real 7/7, H8 23/23 sobre DB aislada, Fase 4 6/6, Fase 5 19/19, corpus OK, demo determinista 5 escenarios, CLI financiera con LLM real y cadena de auditoría íntegra.
+
+**Limitaciones registradas:** el gate de topología cambia temporalmente las contraseñas de los roles de clúster y las restaura al finalizar (los roles son globales, no por base); si el proceso se interrumpe, hay que re-ejecutar `python -m argentgob.db.init` para re-provisionar. `POST /runs/{id}/resume`, la UI y los cinco dominios siguen en AV-03/AV-05. El estado de runs sigue en memoria del proceso padre. La imagen del dashboard no incluye `migrations/` (no las necesita) y el agente no publica el puerto 8090 al host por diseño.
 
 ## 5. AV-03 — UI financiera en vivo
 

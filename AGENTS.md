@@ -39,8 +39,8 @@ hito sin leer su gate.**
   y Fases 1–6 de la capa predictiva (definición analítica, corpus sintético,
   modelado, integración operacional, interfaz y evidencia académica, tests de
   integración de flujos agénticos).
-- **Última suite documentada:** **396 passed + 10 skipped**, medida el 2026-11-10 en AV-01 ([0026](docs/sessions/0026-resumen-av-01-servicio-supervisor-eventos.md)); los 10 skips son 7 de `test_postgres_real.py` (sin `TEST_DATABASE_URL`), 2 de `test_dashboard_apptest.py` (sin `DATABASE_URL`) y 1 de `test_agent_live_llm.py` (sin `DATABASE_URL`). Deriva, modelo canónico y demo determinista de cinco escenarios están verificados.
-- **Migraciones presentes:** 001 → **007**; última revisión aplicada documentada: `007 (head)` en [consideraciones](docs/PROJECT_CONSIDERATIONS.md). Consultar DB real antes de afirmar revisión aplicada actual.
+- **Última suite documentada:** **428 passed + 10 skipped**, medida el 2026-11-10 en AV-02 ([0027](docs/sessions/0027-resumen-av-02-compose-inicializacion.md)); los 10 skips son 7 de `test_postgres_real.py` (sin `TEST_DATABASE_URL`), 2 de `test_dashboard_apptest.py` (sin `DATABASE_URL`) y 1 de `test_agent_live_llm.py` (sin `DATABASE_URL`). Deriva, modelo canónico y demo determinista de cinco escenarios están verificados.
+- **Migraciones presentes:** 001 → **010**; última revisión aplicada documentada: `010 (head)` en [consideraciones](docs/PROJECT_CONSIDERATIONS.md). Consultar DB real antes de afirmar revisión aplicada actual.
 - **Dashboard:** cinco vistas multipágina del rediseño v4: Executive Overview, Auditoría y HITL, Inteligencia Predictiva, Salud del Modelo y Operaciones y Demo ([0022](docs/sessions/0022-resumen-rediseno-v4.md)). La demo actual no usa LLM; `--real` significa persistencia en PostgreSQL.
 - **LLM local:** GPU/CDI y E2E financiero real documentados en [0023](docs/sessions/0023-resumen-llama-server-gpu-e2e-agente-real.md). No asumir disponibilidad actual ni que `test_crewai_real.py` invoque llama.cpp: prueba tools CrewAI con proveedor fake.
 - **Todavía propuesto:** API persistente del agente, timeline incremental, cinco dominios públicos, fronteras de resultados PII/IPI y resume interactivo vinculado al worker. No presentar estos elementos del plan v3 como implementados.
@@ -51,9 +51,9 @@ hito sin leer su gate.**
 
 ### Próximo hito
 
-La capa predictiva Fases 0–6 y las mejoras posteriores están documentadas; no volver a tratar los pendientes históricos ya resueltos como backlog nuevo sin contrastar sesiones. **AV-00 (baseline operativo y contratos) y AV-01 (servicio HTTP, supervisor y eventos) están completos con gate PASS** ([0025](docs/sessions/0025-resumen-av-00-baseline-contratos.md), [0026](docs/sessions/0026-resumen-av-01-servicio-supervisor-eventos.md)). El próximo hito es **AV-02: Compose e inicialización reproducibles**, según [hitos](docs/implementacion-agente-vivo/hitos.md). AV-02…AV-06 están **pendientes**: redactar documentación no cierra sus gates.
+La capa predictiva Fases 0–6 y las mejoras posteriores están documentadas; no volver a tratar los pendientes históricos ya resueltos como backlog nuevo sin contrastar sesiones. **AV-00 (baseline operativo y contratos), AV-01 (servicio HTTP, supervisor y eventos) y AV-02 (Compose e inicialización reproducibles) están completos con gate PASS** ([0025](docs/sessions/0025-resumen-av-00-baseline-contratos.md), [0026](docs/sessions/0026-resumen-av-01-servicio-supervisor-eventos.md), [0027](docs/sessions/0027-resumen-av-02-compose-inicializacion.md)). El próximo hito es **AV-03: UI financiera en vivo**, según [hitos](docs/implementacion-agente-vivo/hitos.md). AV-03…AV-06 están **pendientes**: redactar documentación no cierra sus gates.
 
-Brechas verificadas en AV-00 que condicionan hitos posteriores (no presentarlas como resueltas): el inicializador no siembra políticas (AV-02), `GovernedResumeService._revalidate` no revalida política/digest/guardrails (AV-05), `AuditChainAppender` no está cableado al runtime (AV-05), no hay persistencia de liberación de contenido (AV-04) y la identidad HITL no está configurada en el despliegue (AV-02). La falta de correlación de run quedó **cerrada en AV-01** (`run_id` → `session_id`, verificado en `policy_decisions`). Detalle en [0025](docs/sessions/0025-resumen-av-00-baseline-contratos.md) y [0026](docs/sessions/0026-resumen-av-01-servicio-supervisor-eventos.md).
+Brechas verificadas en AV-00 que condicionan hitos posteriores (no presentarlas como resueltas): `GovernedResumeService._revalidate` no revalida política/digest/guardrails (AV-05), `AuditChainAppender` no está cableado al runtime (AV-05) y no hay persistencia de liberación de contenido (AV-04). Quedaron **cerradas**: la correlación de run en AV-01 (`run_id` → `session_id`, verificado en `policy_decisions`) y, en AV-02, el seed del inicializador, la identidad HITL del despliegue, el rol de runtime con mínimo privilegio y los artefactos del predictor dentro de la imagen. Detalle en [0025](docs/sessions/0025-resumen-av-00-baseline-contratos.md), [0026](docs/sessions/0026-resumen-av-01-servicio-supervisor-eventos.md) y [0027](docs/sessions/0027-resumen-av-02-compose-inicializacion.md).
 
 Los IDs AV no sustituyen ni renumeran H1–H16. Ante conflicto, preservar invariantes y plan normativo externo, registrar la decisión y bloquear solo la unidad afectada. No inventar contratos para acomodar nombres de archivos propuestos.
 
@@ -149,7 +149,7 @@ $src = (Get-Location).Path
 podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest pytest tests/ -q -p no:cacheprovider
 ```
 
-> **Siempre** añadir `-p no:cacheprovider`. Referencia histórica: **334 passed + 9 skipped**; registrar resultado real, no exigir ese número tras agregar tests. Los skips de DB/LLM no satisfacen un gate que requiere integración real. `pytest tests/` incluye unitarias e integración.
+> **Siempre** añadir `-p no:cacheprovider`. Referencia actual: **428 passed + 10 skipped** (AV-02); registrar resultado real, no exigir ese número tras agregar tests. Los skips de DB/LLM no satisfacen un gate que requiere integración real. `pytest tests/` incluye unitarias e integración.
 
 ### 4.3 Tests de integración
 
@@ -226,11 +226,17 @@ El corpus ya existe. En cierres de implementación ejecutar su validación con `
 ### 4.6 Migraciones (si se agregó una)
 
 ```powershell
+# Inicializador completo (AV-02): upgrade + roles + seed + verificación.
 podman run --rm --network argentgob-mvp_default `
-  -e "DATABASE_URL=******postgres:5432/argentgob" `
-  -v "${PWD}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
-  python -m alembic upgrade head
+  -e "ARGENTGOB_ADMIN_PASSWORD_FILE=/run/secrets/postgres_password" `
+  -e "ARGENTGOB_RUNTIME_PASSWORD_FILE=/run/secrets/runtime_password" `
+  -e "ARGENTGOB_DASHBOARD_PASSWORD_FILE=/run/secrets/dashboard_password" `
+  -e "ARGENTGOB_DB_HOST=postgres" `
+  -v "${PWD}/.secrets:/run/secrets:ro,Z" -v "${PWD}:/app:Z" -w /app `
+  localhost/argentgob-mvp-agent:latest python -m argentgob.db.init
 ```
+
+`python -m alembic upgrade head` sigue disponible para DDL aislado, pero no siembra políticas ni provisiona roles: no sustituye al inicializador.
 
 Verificar cabecera con `python -m alembic current` en el entorno configurado. Último head documentado: `007`; confirmar aplicado y registrar evidencia, no asumirlo por el contenido del repositorio.
 

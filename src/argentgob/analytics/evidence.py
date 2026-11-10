@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from psycopg.rows import dict_row
 
@@ -45,6 +46,22 @@ DEFAULT_MODEL_DIR = (
 DEFAULT_CORPUS_PATH = (
     Path(__file__).resolve().parents[3] / "data" / "corpus" / "corpus_v1.parquet"
 )
+
+
+def resolve_model_dir() -> Path:
+    """Artefactos del modelo: `RISK_MODEL_DIR` o el layout del repo (AV-02)."""
+    import os
+
+    configured = os.environ.get("RISK_MODEL_DIR")
+    return Path(configured) if configured else DEFAULT_MODEL_DIR
+
+
+def resolve_corpus_path() -> Path:
+    """Corpus congelado: `RISK_CORPUS_PATH` o el layout del repo (AV-02)."""
+    import os
+
+    configured = os.environ.get("RISK_CORPUS_PATH")
+    return Path(configured) if configured else DEFAULT_CORPUS_PATH
 
 
 def _as_float(value: Any) -> float | None:
@@ -253,8 +270,10 @@ class ModelEvidenceService:
         model_dir: Path | str | None = None,
         corpus_path: Path | str | None = None,
     ):
-        self.model_dir = Path(model_dir) if model_dir else DEFAULT_MODEL_DIR
-        self.corpus_path = Path(corpus_path) if corpus_path else DEFAULT_CORPUS_PATH
+        self.model_dir = Path(model_dir) if model_dir else resolve_model_dir()
+        self.corpus_path = (
+            Path(corpus_path) if corpus_path else resolve_corpus_path()
+        )
 
     @property
     def available(self) -> bool:

@@ -11,7 +11,7 @@
 | Integración PG real | DB/roles de prueba, esquema y servicios reales | `tests/integration/test_agent_live_postgres.py`, `test_public_hitl_postgres.py`; extender pruebas H6/H7/H8 relacionadas |
 | UI | AppTest y API controlada | `tests/unit/test_agent_live_apptest.py`; navegador para evidencia incremental real |
 | LLM local real | llama.cpp + CrewAI + fixtures/PG reales | `tests/integration/test_agent_live_llm.py` (**implementado en AV-01**, marker `llm_local`); `scripts/e2e_agent_live.py` en AV-05 |
-| Despliegue/imagen | Podman Compose y secretos de prueba | Gate de arranque inicial/repetido, fallos, smoke sin fuentes montadas |
+| Despliegue/imagen | Podman Compose y secretos de prueba | `tests/unit/test_av02_stack.py` (**implementado en AV-02**) + `scripts/verify_stack_av02.py` (gate real con PostgreSQL) |
 
 Un archivo por responsabilidad cuando sea necesario; no crear módulos vacíos por cada ID de esta lista. Los IDs T agrupan escenarios de prueba y pueden parametrizarse. Reutilizar tests existentes en vez de duplicarlos por nomenclatura. Ningún nuevo test dependiente de red debe caer por defecto en la suite sin opt-in.
 
@@ -153,6 +153,32 @@ podman run --rm --network argentgob-mvp_default ... python scripts/api_check_age
 
 Elegir primero el subconjunto afectado, luego regresión completa de cierre. No inventar comandos Ruff/typing ejecutables si no están instalados/configurados; usar tooling del proyecto y registrar limitaciones.
 
+### Disponibles desde AV-02
+
+```powershell
+$src = (Get-Location).Path
+# Preflight (secretos, artefactos, GGUF, puertos, Compose)
+python scripts/preflight_stack.py
+# Genera secretos locales faltantes (no sobrescribe existentes)
+python scripts/init_secrets.py
+# Gate real de inicialización/topología (crea y elimina su propia DB)
+podman run --rm --network argentgob-mvp_default `
+  -e "ARGENTGOB_DB_HOST=postgres" -e "ARGENTGOB_DB_PORT=5432" `
+  -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  python scripts/verify_stack_av02.py
+# Gate pytest del hito (96 tests) + smoke LLM real
+podman run --rm --network argentgob-mvp_default `
+  -e "OPENAI_API_BASE=http://llama-server:8080/v1" -e "DATABASE_URL=..." `
+  -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  python scripts/verify_agent_live.py --milestone AV-02 --with-llm
+# Contrato HTTP contra el servicio desplegado (token desde archivo)
+podman run --rm --network argentgob-mvp_default -v "${src}:/app:Z" -w /app `
+  localhost/argentgob-mvp-agent:latest python scripts/api_check_agent_live.py `
+  --base http://agent:8090 --service-token-file /app/.secrets/service_token
+```
+
+`verify_stack_av02.py` cambia temporalmente las contraseñas de los roles de clúster para probar el escape y las restaura al finalizar; si se interrumpe, re-ejecutar `python -m argentgob.db.init`.
+
 ## 4. Evidencia de cierre
 
 Por gate, conservar en ubicación de evidencia acordada por el proyecto (fuera del repo para logs temporales) un resumen machine-readable sin payloads:
@@ -220,3 +246,29 @@ Registro completo en [sesión 0026](../sessions/0026-resumen-av-01-servicio-supe
 | `python -m argentgob.agent.main AAPL --profile analyst` | `agent_run_complete status=SUCCESS` | CLI financiera con LLM real |
 
 **Regla derivada:** el escenario financiero real cierra `PARTIAL` cuando el predictor eleva tentativas a HITL. No es un fallo del run ni del gate: es la agregación del contrato §4. Un gate que exija `SUCCEEDED` en ese escenario estaría midiendo mal.
+
+## 8. Gate medido en AV-02 (2026-11-10)
+
+Registro completo en [sesión 0027](../sessions/0027-resumen-av-02-compose-inicializacion.md). Imágenes `localhost/argentgob-mvp-agent:latest`, `argentgob-mvp-dashboard` y `argentgob-mvp-migrator` reconstruidas y redeployadas antes de validar.
+
+| Verificación | Resultado real | Nota |
+|---|---|---|
+| `scripts/verify_stack_av02.py` | **24 passed, 0 failed** | PostgreSQL real; base nueva, segundo arranque, base existente, fallo de seed, roles y contraseña con caracteres reservados |
+| `scripts/verify_agent_live.py --milestone AV-02` | `collected: 96`, `96 passed`, `PASS` | Sin LLM |
+| `scripts/verify_agent_live.py --milestone AV-02 --with-llm` | `96 passed` + `1 passed` (LLM), `PASS` | Smoke real sin monkeypatch |
+| `pytest tests/` | **428 passed, 10 skipped** | 7 PG sin `TEST_DATABASE_URL`, 2 AppTest sin `DATABASE_URL`, 1 LLM sin `DATABASE_URL` |
+| `pytest tests/integration/test_postgres_real.py` | 7 passed | DB aislada `argentgob_av02_test`, eliminada al finalizar |
+| `scripts/e2e_h8_console.py` | 23 passed, 0 failed | DB aislada `argentgob_av02_h8` |
+| `scripts/e2e_fase4_predictive.py` / `e2e_fase5_evidence.py` | 6/6 y 19/19 | DB aislada `argentgob_av02_e2e` |
+| `scripts/api_check_agent_live.py --service-token-file` | `16 passed, 0 failed` | Contra el servicio desplegado en la red interna |
+| `podman compose config` | exit 0 | Proveedor Compose real (v2.39.2) |
+| `podman compose up -d` | `migrator` exit 0, `agent`/`dashboard` healthy | `OK: inicialización completa (revision=010, policies=8, roles=2)` |
+| `/ready` del agente desplegado | `ready=true`, `revision=010`, `policies=8` | Rol de runtime, no administrativo |
+| Degradación sin LLM | `/ready` con `llm_reachable=false`; `POST /runs` → 503 | Dashboard y auditoría siguen operativos |
+| Imagen sin bind mount (T-A07) | `RiskPredictor.available=True`, prompts/policies/migrations/corpus presentes | `data/` copiado en la imagen |
+| `scripts/validate_corpus.py` | `RESULTADO: OK` | |
+| `scripts/demo_end_to_end.py` | 5 escenarios OK/BLOCK/HITL | Sin LLM |
+| `python -m argentgob.agent.main AAPL --profile analyst` | `status=SUCCESS` | CLI financiera con LLM real |
+| `python -m argentgob.audit.cli` | `OK: la cadena de auditoría es íntegra.` | |
+
+**Regla derivada:** el gate de topología no puede ejecutarse solo con parseo de YAML. Crea su propia base, ejecuta el inicializador real y verifica privilegios efectivos de los roles; los roles son de clúster, por lo que el gate restaura las contraseñas del despliegue al terminar.

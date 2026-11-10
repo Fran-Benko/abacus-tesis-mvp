@@ -1,19 +1,28 @@
 # argentgob-mesh-mvp/compose.yaml
-# Requiere: podman >= 4.6, podman-compose >= 1.1
+# Requiere: podman >= 4.6 con proveedor Compose (docker-compose v2 o podman-compose >= 1.1)
 # Uso: podman compose up -d
+#
+# AV-02 - topologia reproducible:
+# - `migrator` es el inicializador obligatorio (Alembic + roles + seed + verificacion).
+#   `agent` y `dashboard` no arrancan hasta que termine con exit 0.
+# - Ninguna credencial se interpola en este archivo: cada consumidor recibe su
+#   secreto montado y construye el DSN con escape correcto (`argentgob.db.dsn`).
+# - `agent` es una API persistente (sin stdin/tty); no publica puertos al host.
+# - `dashboard` publica solo en loopback y no depende del LLM.
 
 name: argentgob-mvp
 
 services:
 
-  # ─── LLM local (GPU CUDA) ───────────────────────────────────────────
+  # --- LLM local (GPU CUDA) -------------------------------------------
   llama-server:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
-    # Montar el modelo descargado localmente (ver scripts/download_model.sh)
+    # Imagen fijada por digest (pin probado en AV-02); el tag queda como alias.
+    image: ghcr.io/ggml-org/llama.cpp@sha256:6ac921528d613deb0fd142c654735e594a446a1c37a069eeab08d8fd974d4bec
     volumes:
-      - ./models:/models:ro,Z
+      # Ruta del GGUF parametrizada y de solo lectura.
+      - ${GGUF_DIR:-./models}:/models:ro,Z
     command: >
-      --model /models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+      --model /models/${GGUF_FILE:-Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf}
       --host 0.0.0.0
       --port 8080
       --ctx-size 8192
@@ -22,19 +31,19 @@ services:
       --parallel 1
       --jinja
     ports:
-      - "8080:8080"
+      # Solo loopback: diagnostico local, nunca expuesto a la red del host.
+      - "127.0.0.1:8080:8080"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 60s   # El modelo tarda en cargarse
-    # GPU NVIDIA via CDI (requiere nvidia-container-toolkit en WSL2)
     devices:
       - nvidia.com/gpu=all
     restart: unless-stopped
 
-  # ─── Base de datos ─────────────────────────────────────────────────
+  # --- Base de datos ---------------------------------------------------
   postgres:
     image: postgres:16-alpine
     environment:
@@ -52,51 +61,79 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # ─── Migraciones (run-once) ────────────────────────────────────────
+  # --- Inicializador (run-once, obligatorio) ---------------------------
   migrator:
     build:
       context: .
       dockerfile: containers/agent.Containerfile
-    command: ["python", "-m", "alembic", "upgrade", "head"]
+    command: ["python", "-m", "argentgob.db.init"]
     env_file: .env
     environment:
-      DATABASE_URL: "postgresql+psycopg://argentgob_app:${POSTGRES_PASSWORD}@postgres:5432/argentgob"
+      # DSN administrativo construido desde el secreto (sin interpolar valores).
+      ARGENTGOB_ADMIN_PASSWORD_FILE: /run/secrets/postgres_password
+      ARGENTGOB_RUNTIME_PASSWORD_FILE: /run/secrets/runtime_password
+      ARGENTGOB_DASHBOARD_PASSWORD_FILE: /run/secrets/dashboard_password
+      ARGENTGOB_DB_HOST: postgres
+      ARGENTGOB_DB_PORT: "5432"
+      ARGENTGOB_DB_NAME: argentgob
+    secrets:
+      - postgres_password
+      - runtime_password
+      - dashboard_password
     depends_on:
       postgres:
         condition: service_healthy
     restart: "no"
 
-  # ─── Agente + middleware ────────────────────────────────────────────
+  # --- API interna de runs (persistente) -------------------------------
   agent:
     build:
       context: .
       dockerfile: containers/agent.Containerfile
+    command: ["python", "-m", "argentgob.live.server"]
     env_file: .env
     environment:
-      # LLM local: apuntar al servidor llama.cpp
       OPENAI_API_BASE: "http://llama-server:8080/v1"
       OPENAI_API_KEY: "local-no-key-required"
       OPENAI_MODEL_NAME: "llama-3.1-8b-instruct"
-      # Base de datos
-      DATABASE_URL: "postgresql+psycopg://argentgob_app:${POSTGRES_PASSWORD}@postgres:5432/argentgob"
-      # Configuración de gobernanza
+      # Rol de runtime: sin DDL ni superusuario (migracion 008).
+      ARGENTGOB_RUNTIME_PASSWORD_FILE: /run/secrets/runtime_password
+      ARGENTGOB_DB_HOST: postgres
+      ARGENTGOB_DB_PORT: "5432"
+      ARGENTGOB_DB_NAME: argentgob
+      AGENT_API_HOST: "0.0.0.0"
+      AGENT_API_PORT: "8090"
+      AGENT_API_SERVICE_TOKEN_FILE: /run/secrets/service_token
       ENVIRONMENT: "LOCAL"
       LOG_LEVEL: "INFO"
       MAX_PAYLOAD_BYTES: "65536"
       MAX_JSON_DEPTH: "16"
+      MAX_JSON_NODES: "1000"
+      MAX_STRING_BYTES: "4096"
+      PRIVACY_SCAN_TIMEOUT_MS: "25"
       RATE_LIMIT_CALLS_PER_RUN: "5"
       AGENT_PROFILE: "${AGENT_PROFILE:-analyst}"
+      # Artefactos del predictor copiados en la imagen (RO en runtime).
+      RISK_MODEL_DIR: "/app/data/models/risk_model_v1"
+      RISK_CORPUS_PATH: "/app/data/corpus/corpus_v1.parquet"
+    secrets:
+      - runtime_password
+      - service_token
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       llama-server:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-    # Modo interactivo para ingresar el ticker
-    stdin_open: true
-    tty: true
-    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    # Sin `ports`: solo alcanzable por la red interna del proyecto.
+    restart: unless-stopped
 
-  # ─── Dashboard Streamlit (incluido en MVP) ──────────────────────────
+  # --- Dashboard Streamlit ---------------------------------------------
   dashboard:
     build:
       context: .
@@ -105,16 +142,31 @@ services:
               "--server.port=8501", "--server.address=0.0.0.0"]
     env_file: .env
     environment:
-      DATABASE_URL: "postgresql+psycopg://argentgob_app:${POSTGRES_PASSWORD}@postgres:5432/argentgob"
+      # Rol de solo lectura + resolucion condicional de approvals.
+      ARGENTGOB_DASHBOARD_PASSWORD_FILE: /run/secrets/dashboard_password
+      ARGENTGOB_DB_HOST: postgres
+      ARGENTGOB_DB_PORT: "5432"
+      ARGENTGOB_DB_NAME: argentgob
+      AGENT_API_BASE: "http://agent:8090"
+      # Identidad HITL del despliegue (fixture solo LOCAL/TEST).
+      IDENTITY_DEVELOPMENT_ONLY: "true"
+      IDENTITY_FIXTURE_ROLES: '{"auditor-1": ["viewer", "auditor"]}'
+      AUTHORIZED_AUDITOR_ROLES: '["auditor"]'
+      RISK_MODEL_DIR: "/app/data/models/risk_model_v1"
+      RISK_CORPUS_PATH: "/app/data/corpus/corpus_v1.parquet"
+    secrets:
+      - dashboard_password
     ports:
-      - "8501:8501"
-    # Fase 5: artefactos del modelo y corpus para la evidencia académica
-    # (matriz de confusión y curva de calibración sobre la partición congelada).
-    volumes:
-      - ./data:/app/data:ro
+      - "127.0.0.1:8501:8501"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8501/_stcore/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     restart: unless-stopped
 
 volumes:
@@ -123,3 +175,9 @@ volumes:
 secrets:
   postgres_password:
     file: .secrets/postgres_password
+  runtime_password:
+    file: .secrets/runtime_password
+  dashboard_password:
+    file: .secrets/dashboard_password
+  service_token:
+    file: .secrets/service_token

@@ -19,6 +19,19 @@ import urllib.request
 TERMINAL = {"SUCCEEDED", "PARTIAL", "BLOCKED", "FAILED", "TIMED_OUT", "REJECTED", "EXPIRED", "INDETERMINATE"}
 
 
+def _service_token(path: str) -> str | None:
+    """Token de servicio desde archivo o entorno (AV-02); no se imprime."""
+    import os
+
+    if path:
+        try:
+            with open(path, encoding="utf-8") as handle:
+                return handle.read().strip() or None
+        except OSError:
+            return None
+    return os.environ.get("AGENT_API_SERVICE_TOKEN") or None
+
+
 def _request(method: str, url: str, *, body=None, headers=None):
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(
@@ -43,9 +56,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", default="http://127.0.0.1:8090")
     parser.add_argument("--asset", default="AAPL")
     parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument(
+        "--service-token-file",
+        default="",
+        help="archivo con el token de servicio (AV-02); nunca se imprime",
+    )
     args = parser.parse_args(argv)
 
     actor = {"x-argentgob-actor": "auditor-api"}
+    token = _service_token(args.service_token_file)
+    if token:
+        actor["x-argentgob-service-token"] = token
     checks: list[tuple[str, bool, str]] = []
 
     def check(name: str, ok: bool, detail: str = "") -> None:
@@ -91,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             "input": {"asset": args.asset},
             "idempotency_key": "api-check-no-actor",
         },
+        headers={"x-argentgob-service-token": token} if token else None,
     )
     check("actor ausente rechazado (401)", status == 401, str(status))
 
@@ -119,8 +141,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     check("clave conflictiva 409", status == 409, str(status))
 
+    other_actor = {"x-argentgob-actor": "otro"}
+    if token:
+        other_actor["x-argentgob-service-token"] = token
     status, _ = _request(
-        "GET", f"{args.base}/runs/{run_id}", headers={"x-argentgob-actor": "otro"}
+        "GET", f"{args.base}/runs/{run_id}", headers=other_actor
     )
     check("run de otro actor 404", status == 404, str(status))
 
