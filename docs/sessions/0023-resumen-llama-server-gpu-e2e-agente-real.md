@@ -98,11 +98,16 @@ Resultado:
 
 ## Documentación actualizada
 
-- `docs/TFG/E4-ENTREGABLE-PREPARADO.md`:
+- `docs/TFG/E4-ENTREGABLE-PREPARADO.md` (local, **ignorado por git** — ver
+  abajo):
   - §B.2: llama-server → [VERIFICADO] (HTTP 200, GPU/CDI, 5655 MiB VRAM).
   - §B.2: E2E agente real → [VERIFICADO] (SUCCESS, gobernanza activa,
     persistencia en PG real).
   - Tabla G1: brecha **RESUELTA** (con el comando y el resultado).
+- `.gitignore`: se agregó `docs/TFG/` — los entregables del TFG contienen
+  datos personales y **no se suben al repositorio remoto**.
+- `docs/sessions/0023-resumen-llama-server-gpu-e2e-agente-real.md` (este
+  archivo, sí versionado).
 
 ---
 
