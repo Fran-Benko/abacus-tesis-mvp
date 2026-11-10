@@ -31,8 +31,21 @@ from argentgob.analytics.store import PredictionStore
 log = get_logger(__name__)
 
 
-def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew:
-    """Construye un Crew de análisis financiero gobernado según el perfil."""
+def build_analysis_crew(
+    asset_query: str,
+    profile_name: str = "analyst",
+    *,
+    run_id: str | None = None,
+    observer=None,
+    verbose: bool = True,
+) -> Crew:
+    """Construye un Crew de análisis financiero gobernado según el perfil.
+
+    AV-01 — `run_id` correlaciona la evidencia persistida con el run y
+    `observer` publica eventos de frontera. Sin ambos, el comportamiento es el
+    histórico de CLI/tests. `verbose=False` evita que el hijo de un run escriba
+    stdout libre (AV-I06).
+    """
     settings = get_settings()
     profile = PROFILES[profile_name]
 
@@ -74,6 +87,8 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
         feature_builder=feature_builder,
         risk_predictor=risk_predictor,
         prediction_store=prediction_store,
+        run_id=run_id,
+        observer=observer,
     )
 
     # Instanciar herramientas gobernadas según el perfil.
@@ -122,7 +137,7 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
         backstory=system_prompt,
         tools=tools,
         llm=llm,
-        verbose=True,
+        verbose=verbose,
         max_iter=profile.max_tool_calls,
         max_retry_limit=0,
     )
@@ -143,5 +158,5 @@ def build_analysis_crew(asset_query: str, profile_name: str = "analyst") -> Crew
     return Crew(
         agents=[analyst_agent],
         tasks=[analysis_task],
-        verbose=True,
+        verbose=verbose,
     )

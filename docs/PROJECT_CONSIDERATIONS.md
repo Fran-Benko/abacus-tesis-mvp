@@ -67,10 +67,11 @@ Grep de los resumenes para conocer el baseline histórico:
 baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 = 126
 → H7 +24 unit = 150 → H8 +42 = **192 passed** (unit).
 
-> **Cifra oficial actual (verificada, sesión de cierre de brechas):** la suite
-> completa `pytest tests/` reporta **334 passed + 9 skipped** (shellId 239,
-> 2026-11-09). Los 9 skipped son por ausencia de `TEST_DATABASE_URL` /
-> `DATABASE_URL` (ver §7 Límites).
+> **Cifra oficial actual (verificada, AV-01):** la suite completa
+> `pytest tests/` reporta **396 passed + 10 skipped** (2026-11-10). Los 10
+> skipped son por ausencia de `TEST_DATABASE_URL` / `DATABASE_URL` (ver §7
+> Límites): 7 de `test_postgres_real.py`, 2 de `test_dashboard_apptest.py` y 1
+> de `test_agent_live_llm.py`.
 
 ### 3.2 Tests de integración
 
@@ -306,8 +307,18 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
   correlación de run, sin persistencia de liberación de contenido e identidad
   HITL sin configurar). Detalle en
   [sesión 0025](sessions/0025-resumen-av-00-baseline-contratos.md).
-- Próximo hito: **AV-01 — Servicio HTTP, supervisor y eventos** (ver
-  [hitos](implementacion-agente-vivo/hitos.md)). AV-01…AV-06 siguen pendientes.
+- **AV-01 — Servicio HTTP, supervisor y eventos: completo (PASS)** — verificado
+  el 2026-11-10: suite **396 passed + 10 skipped**, gate
+  `scripts/verify_agent_live.py --milestone AV-01 --with-llm` PASS (84 tests +
+  1 smoke LLM real), `scripts/api_check_agent_live.py` 16/16 contra el servicio
+  desplegado, PG real 7/7, H8 23/23 sobre DB aislada, Fase 4 6/6, Fase 5 19/19,
+  corpus OK, demo determinista 5 escenarios y CLI financiera con LLM real.
+  Implementa `argentgob.live` (API FastAPI, supervisor con un proceso hijo por
+  run, IPC por socket loopback autenticado, buffer de eventos con allowlist) y
+  cierra la brecha de correlación de run (`run_id` → `session_id`). Detalle en
+  [sesión 0026](sessions/0026-resumen-av-01-servicio-supervisor-eventos.md).
+- Próximo hito: **AV-02 — Compose e inicialización reproducibles** (ver
+  [hitos](implementacion-agente-vivo/hitos.md)). AV-02…AV-06 siguen pendientes.
 
 ---
 
@@ -350,7 +361,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 ### 7.3 Tests skipped por falta de `TEST_DATABASE_URL` / `DATABASE_URL`
 
-- La suite completa reporta **334 passed + 9 skipped**. Los **9 skipped** son
+- La suite completa reporta **396 passed + 10 skipped**. Los **10 skipped** son
   exactamente:
   - `tests/integration/test_postgres_real.py` (7): validan migraciones en head,
     constraints UNIQUE/CHECK, grants mínimos de roles de consola y flujo real
@@ -358,6 +369,9 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
     `TEST_DATABASE_URL` no está definida.
   - `tests/unit/test_dashboard_apptest.py` (2): cargan el dashboard Streamlit
     (AppTest) contra la base; se saltan sin `DATABASE_URL` (stack PostgreSQL).
+  - `tests/integration/test_agent_live_llm.py` (1): smoke LLM real de AV-01;
+    se salta sin `DATABASE_URL` y sin llama.cpp alcanzable. Se acredita con
+    `-m llm_local` sobre la red del stack.
 - Para acreditarlos en una corrida de cierre:
   ```powershell
   podman run --rm -e "TEST_DATABASE_URL=******postgres:5432/argentgob_test" `
@@ -402,7 +416,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 | H8 | Consola sanitizada y resolución autorizada | ✅ Implementada y verificada | migración 004, `src/argentgob/console/` + `identity/`, E2E 23/23 |
 | H9 | Integración con CrewAI (GovernedTool) | ✅ Implementada y verificada | `src/argentgob/module_a/governed_tool.py`, `test_crewai_real.py` |
 | H10 | Dashboard de monitoreo (5 vistas, ECharts, auto-refresh) | ✅ Implementada y verificada | `src/argentgob/dashboard/`, AppTest, browser |
-| H11 | Suite de tests unitarios e integración | ✅ Implementada (**334 passed + 9 skipped**) | `pytest tests/` (verificado 2026-11-09) |
+| H11 | Suite de tests unitarios e integración | ✅ Implementada (**396 passed + 10 skipped**) | `pytest tests/` (verificado 2026-11-10, AV-01) |
 | H12 | Corpus predictivo versionado (sintético) | ✅ Implementada y verificada | `data/corpus/corpus_v1.parquet` + `corpus_manifest.json` (seed 42, hash congelado), `validate_corpus.py` OK |
 | H13 | Preparación de features (27, pre-ejecución, anti-leakage) | ✅ Implementada y verificada | `src/argentgob/analytics/features.py` (FeatureBuilder) |
 | H14 | Entrenamiento/calibración/evaluación del modelo | ✅ Implementada y verificada | `scripts/train_risk_model.py`, `data/models/risk_model_v1/` (pipeline.joblib, thresholds.json, metrics) |
@@ -428,7 +442,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 | Verificación | Resultado |
 |---|---|
-| `pytest tests/` (suite completa, imagen reconstruida) | **334 passed + 9 skipped** |
+| `pytest tests/` (suite completa, imagen reconstruida) | **396 passed + 10 skipped** (AV-01, 2026-11-10) |
 | E2E H8 (`scripts/e2e_h8_console.py`) | 23/23 checks OK (sobre DB de prueba limpia; 22/23 sobre la DB compartida por acumulación de approvals PENDING) |
 | E2E Fase 4 (`scripts/e2e_fase4_predictive.py`) | 6/6 checks OK |
 | E2E Fase 5 (`scripts/e2e_fase5_evidence.py`) | 19/19 checks OK |
@@ -568,7 +582,7 @@ dominios, congelado, anti-circularidad).
   prioridad alta (criterios, HITL E2E, PG real, concurrencia, CrewAI real),
   prioridad media (deriva PSI, políticas YAML, demo E2E 5 escenarios) y
   rediseño UX/UI v4.
-- **Tests:** suite completa verificada **334 passed + 9 skipped** (ver §3.1).
+- **Tests:** suite completa verificada **396 passed + 10 skipped** (ver §3.1).
 - **Migraciones:** 001 → **007 (head)** (ver §8.2).
 - **E2E:** H8 23/23 · Fase 4 6/6 · Fase 5 19/19 · demo 5/5 escenarios.
 - **Dashboard:** 5 vistas multipágina (ver §10.3).
@@ -590,7 +604,7 @@ dominios, congelado, anti-circularidad).
 
 ## 11. Documentos relacionados
 
-- **[Plan v3 de agente en vivo y escenarios públicos](implementacion-agente-vivo/README.md)** — hoja de ruta de la nueva ampliación AV-00…AV-06, todavía pendiente. Incluye contratos, perfiles/guardrails, configuración, demos con LLM real y tests/gates por hito. Las cifras anteriores son resultados históricos; esta incorporación documental no vuelve a ejecutar ni certifica sus pruebas.
+- **[Plan v3 de agente en vivo y escenarios públicos](implementacion-agente-vivo/README.md)** — hoja de ruta de la ampliación AV-00…AV-06. AV-00 y AV-01 están completos con gate PASS ([0025](sessions/0025-resumen-av-00-baseline-contratos.md), [0026](sessions/0026-resumen-av-01-servicio-supervisor-eventos.md)); AV-02…AV-06 siguen pendientes. Incluye contratos, perfiles/guardrails, configuración, demos con LLM real y tests/gates por hito.
 - [Plan de continuación (hoja de ruta predictiva histórica)](plan-continuacion.md)
 - [Entrega del Módulo 2 (documentación técnica e ingeniería)](modulo2-entrega.md)
 - [Resúmenes de sesión por hito](sessions/)

@@ -23,6 +23,7 @@ from argentgob.core.errors import (
     HookAborted,
     ReasonCode,
 )
+from argentgob.core.observer import GovernanceObserver, NullObserver
 from argentgob.db.audit import AuditWriter
 from argentgob.hitl.errors import HitlError
 from argentgob.module_b.argument_transforms import (
@@ -64,6 +65,8 @@ class GovernanceMiddleware:
             feature_builder: FeatureBuilder | None = None,
             risk_predictor: RiskPredictor | None = None,
             prediction_store: PredictionStore | None = None,
+            run_id: str | None = None,
+            observer: GovernanceObserver | None = None,
         ):
             self.settings = settings
             self.sanitizer = Sanitizer(settings)
@@ -81,6 +84,10 @@ class GovernanceMiddleware:
             self.feature_builder = feature_builder
             self.risk_predictor = risk_predictor
             self.prediction_store = prediction_store
+            # AV-01 — Correlación de run y observación de fronteras. Sin run ni
+            # observador se conserva el comportamiento histórico (CLI/tests).
+            self.run_id = run_id
+            self.observer: GovernanceObserver = observer or NullObserver()
             # Registro temporal de decisiones por evento (para enlazar post_hook).
             self._decision_index: dict[str, str] = {}
 
@@ -103,6 +110,16 @@ class GovernanceMiddleware:
             resource=resource,
             environment=self.settings.environment,
             execution_arguments=execution_arguments,
+            run_id=self.run_id,
+        )
+        self.emit_event(
+            "tool.requested",
+            {
+                "event_id": envelope.event_id,
+                "tool": tool_name,
+                "resource": resource,
+                "operation_class": operation_class,
+            },
         )
 
         log.info(
@@ -206,6 +223,7 @@ class GovernanceMiddleware:
             self.audit.record_decision(
                 envelope, decision, latency_pre_ms=latency_pre_ms
             )
+            self._emit_decision(envelope, decision, latency_pre_ms)
             raise HookAborted(
                 reason=f"blocked:{decision.reason_code.value}",
                 source="argentgob.pep",
@@ -252,6 +270,9 @@ class GovernanceMiddleware:
                     blocked_by=guard_name,
                     latency_pre_ms=latency_pre_ms,
                 )
+                self._emit_decision(
+                    envelope, decision, latency_pre_ms, blocked_by=guard_name
+                )
                 raise HookAborted(
                     reason=f"blocked:{guard_reason}",
                     source=f"argentgob.guardrail.{guard_name}",
@@ -275,6 +296,7 @@ class GovernanceMiddleware:
         self.audit.record_decision(
             envelope, decision, latency_pre_ms=latency_pre_ms
         )
+        self._emit_decision(envelope, decision, latency_pre_ms)
         self._decision_index[envelope.event_id] = decision.decision_id
 
         return envelope
@@ -362,6 +384,7 @@ class GovernanceMiddleware:
         self.audit.record_decision(
             envelope, decision, latency_pre_ms=latency_pre_ms
         )
+        self._emit_decision(envelope, decision, latency_pre_ms)
         # Registrar en el índice de decisiones para que un eventual post_hook
         # (camino de excepción no-HookAborted) pueda vincular su resultado con
         # la decisión HITL persistida (misma convención que el camino PASS).
@@ -393,6 +416,16 @@ class GovernanceMiddleware:
                         destination=None,
                         sanitized_preview=envelope.telemetry_arguments,
                     )
+                self.emit_event(
+                    "approval.pending",
+                    {
+                        "event_id": envelope.event_id,
+                        "decision_id": decision.decision_id,
+                        "tool": envelope.tool_name,
+                        "approval_ref": approval.approval_id,
+                        "state": "WAITING_APPROVAL",
+                    },
+                )
             except HitlError as exc:
                 log.warning(
                     "policy_hitl_service_error",
@@ -431,6 +464,53 @@ class GovernanceMiddleware:
             latency_post_ms=latency_post_ms,
             decision_id=decision_id,
         )
+        self.emit_event(
+            "tool.completed" if error is None else "tool.failed",
+            {
+                "event_id": envelope.event_id,
+                "decision_id": decision_id,
+                "tool": envelope.tool_name,
+                "execution_status": status,
+                "message": None if error is None else type(error).__name__,
+            },
+        )
+
+    # ── AV-01: observación de fronteras ───────────────────────────────
+    def emit_event(self, kind: str, payload: dict[str, Any]) -> None:
+        """Publica un evento acotado; una falla de observación no cambia la decisión."""
+        try:
+            self.observer.on_governance_event(kind, payload)
+        except Exception as exc:  # noqa: BLE001 - observación degradada
+            log.warning(
+                "governance_observer_failed",
+                kind=kind,
+                error_type=type(exc).__name__,
+            )
+
+    def _emit_decision(
+        self,
+        envelope: ToolCallEnvelope,
+        decision: Any,
+        latency_pre_ms: float,
+        *,
+        blocked_by: str | None = None,
+    ) -> None:
+        """Emite `governance.decided` con la decisión ya persistida."""
+        payload: dict[str, Any] = {
+            "event_id": envelope.event_id,
+            "decision_id": decision.decision_id,
+            "tool": envelope.tool_name,
+            "resource": envelope.resource,
+            "operation_class": envelope.operation_class,
+            "action": decision.action.value,
+            "reason_codes": [r.value for r in decision.reason_codes],
+            "risk_level": decision.risk_level.value,
+            "policy_id": decision.policy_id,
+            "latency_ms": latency_pre_ms,
+        }
+        if blocked_by:
+            payload["message"] = f"blocked_by:{blocked_by}"
+        self.emit_event("governance.decided", payload)
 
     def _block(
         self,
@@ -455,6 +535,7 @@ class GovernanceMiddleware:
         self.audit.record_decision(
             envelope, decision, latency_pre_ms=latency_pre_ms
         )
+        self._emit_decision(envelope, decision, latency_pre_ms)
         raise HookAborted(reason=f"blocked:{reason.value}", source=source)
 
     @staticmethod

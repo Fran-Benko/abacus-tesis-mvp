@@ -55,6 +55,12 @@ Una lectura PASS puede terminar `execution_status=SUCCESS` y `content_status=WIT
 
 Ruta interna, JSON estricto; FastAPI/ASGI con un worker. No asumir que estas dependencias directas o endpoints ya existen.
 
+### 3.1 Estado implementado en AV-01 (2026-11-10)
+
+`src/argentgob/live/api.py` implementa `GET /health`, `GET /ready`, `POST /runs` y `GET /runs/{id}`. `POST /runs/{id}/resume` **no** existe todavía (AV-05). El escenario habilitado es solo `finanzas`, con perfiles `analyst` y `analyst_restricted`; `admin` se rechaza con 422 (AV-I05). El actor llega por la cabecera `x-argentgob-actor` y el token de servicio por `x-argentgob-service-token`; con `AGENT_API_SERVICE_TOKEN` configurado, la ausencia o el valor incorrecto produce 401, y fuera de LOCAL/TEST sin token configurado se responde 503 (fail-closed). El cuerpo se limita a 65536 bytes antes del parseo (413).
+
+`/ready` separa `checks` (configuración mínima del servicio) de `capabilities` (`llm_base_configured`, `capacity_free`), de modo que un cupo ocupado no se confunda con un proceso roto. El supervisor mantiene un run activo global, idempotencia por `(actor, idempotency_key)` con digest canónico del input, TTL de runs terminales y tombstones acotados. Un reinicio del servicio pierde runs y eventos: la UI debe explicar la pérdida sin simular recovery.
+
 ### POST /runs
 
 ```json
@@ -104,6 +110,16 @@ Errores: 413 tamaño; 422 esquema; 401 autenticación; 403 permisos generales; 4
 ## 4. Eventos y estados
 
 Campos obligatorios: `schema_version`, `run_id`, `seq` creciente, timestamp UTC, `kind`. Campos opcionales por allowlist: `event_id` (tentativa), `decision_id`, herramienta, recurso lógico, decisión, `reason_codes`, estado de ejecución, estado de contenido, latencia medida, referencia de aprobación y digest necesario. `null`/ausente significa no disponible; no inventar latencias o riesgo.
+
+### 4.1 Estado implementado en AV-01 (2026-11-10)
+
+`src/argentgob/live/events.py` implementa la allowlist (`_ALLOWED_FIELDS`), el catálogo cerrado de `kind` y un anillo acotado (`max_events`, `max_event_bytes`) con `seq` monotónica, `first_available_seq` y `truncated`. Un `kind` fuera del catálogo se descarta; un campo fuera de la allowlist no se publica. `sanitize_payload` recorta ANSI/controles y, si el evento excede el tamaño, descarta `result_summary` y luego reduce a metadata mínima marcando `truncated`.
+
+El PEP emite por un `GovernanceObserver` inyectado (`src/argentgob/core/observer.py`): `tool.requested` al construir el envelope, `governance.decided` tras persistir la decisión (incluye `blocked_by` como `message`), `tool.started` antes del executor, `tool.completed`/`tool.failed` en el post-hook y `approval.pending` al crear la aprobación H6. Sin observador se usa `NullObserver`, que conserva el comportamiento de CLI y tests. Una excepción del observador se registra y **no** altera la decisión de negocio.
+
+El canal IPC es un socket loopback efímero con handshake de token de un solo uso (`SocketIpc`); el hijo (`python -m argentgob.live.child`) escribe JSON-lines y el padre lo consume en un hilo lector. `stdout`/`stderr` del hijo van a `DEVNULL` y nunca se convierten en eventos.
+
+Agregación implementada (`_DecisionTally`): `SUCCEEDED` solo si todas las tentativas fueron PASS y hay resultado válido; con acciones retenidas (HITL) o bloqueadas y resultado → `PARTIAL`; sin ninguna ejecución autorizada → `BLOCKED`. Un `HookAborted` sin resultado también cierra `BLOCKED`. digest necesario. `null`/ausente significa no disponible; no inventar latencias o riesgo.
 
 Tipos: `run.accepted`, `run.started`, `tool.requested`, `governance.decided`, `tool.started`, `tool.completed`, `tool.failed`, `content.released`, `content.withheld`, `approval.pending`, `approval.resolved`, `execution.resumed`, `run.finished`.
 

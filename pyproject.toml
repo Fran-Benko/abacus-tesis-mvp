@@ -26,6 +26,9 @@ dependencies = [
     "pandas>=2.2",
     "pyyaml>=6.0",
         "scikit-learn>=1.5",
+    # AV-01 — API interna de runs (dependencias directas declaradas al implementar).
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
     ]
 
 [project.optional-dependencies]
@@ -47,6 +50,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 markers = [
     "integration: pruebas de integración del flujo de gobernanza",
+    "llm_local: pruebas que requieren llama.cpp real (opt-in, AV-01)",
 ]
 
 [tool.ruff]

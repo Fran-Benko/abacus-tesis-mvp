@@ -6,11 +6,11 @@
 
 | Nivel | Dependencias | Cobertura / rutas objetivo propuestas |
 |---|---|---|
-| Unitario/contrato | Sin red, reloj falso, contadores y barreras | `tests/unit/test_agent_server.py`, `test_run_supervisor.py`, `test_run_events.py`, `test_public_schemas.py`, `test_public_guardrails.py`, `test_content_boundary.py` |
-| Integración determinista | CrewAI/tools reales; proveedor/LLM dobles explícitos | `tests/integration/test_agent_live_flow.py`, `test_public_agentic_flows.py`; reutilizar tests de perfiles/PEP/HITL existentes |
+| Unitario/contrato | Sin red, reloj falso, contadores y barreras | `tests/unit/test_agent_server.py`, `test_run_supervisor.py`, `test_run_events.py`, `test_run_aggregation.py`, `test_pep_observer.py` (**implementados en AV-01**); `test_public_schemas.py`, `test_public_guardrails.py`, `test_content_boundary.py` (AV-04/05) |
+| Integración determinista | CrewAI/tools reales; proveedor/LLM dobles explícitos | `tests/integration/test_agent_live_flow.py` (**implementado en AV-01**), `test_public_agentic_flows.py` (AV-05); reutilizar tests de perfiles/PEP/HITL existentes |
 | Integración PG real | DB/roles de prueba, esquema y servicios reales | `tests/integration/test_agent_live_postgres.py`, `test_public_hitl_postgres.py`; extender pruebas H6/H7/H8 relacionadas |
 | UI | AppTest y API controlada | `tests/unit/test_agent_live_apptest.py`; navegador para evidencia incremental real |
-| LLM local real | llama.cpp + CrewAI + fixtures/PG reales | `tests/integration/test_agent_live_llm.py` y runner futuro `scripts/e2e_agent_live.py` |
+| LLM local real | llama.cpp + CrewAI + fixtures/PG reales | `tests/integration/test_agent_live_llm.py` (**implementado en AV-01**, marker `llm_local`); `scripts/e2e_agent_live.py` en AV-05 |
 | Despliegue/imagen | Podman Compose y secretos de prueba | Gate de arranque inicial/repetido, fallos, smoke sin fuentes montadas |
 
 Un archivo por responsabilidad cuando sea necesario; no crear módulos vacíos por cada ID de esta lista. Los IDs T agrupan escenarios de prueba y pueden parametrizarse. Reutilizar tests existentes en vez de duplicarlos por nomenclatura. Ningún nuevo test dependiente de red debe caer por defecto en la suite sin opt-in.
@@ -127,10 +127,29 @@ Scripts existentes que se ejecutan según hito: `scripts/e2e_h8_console.py`, `sc
 ### A crear con la implementación
 
 - Runners/archivos de la tabla inicial: declarar exactos selectors una vez existan y comprobar colección no vacía con `pytest --collect-only`.
-- Gate agregado ligero propuesto `scripts/verify_agent_live.py --milestone AV-XX`: reutiliza pytest y scripts existentes, valida prerrequisitos y genera evidencia sanitizada; no framework de manifests nuevo. Es entregable de AV-01, ampliado en cada hito.
+- Gate agregado ligero `scripts/verify_agent_live.py --milestone AV-XX`: **implementado en AV-01** para `AV-01`; reutiliza pytest y scripts existentes, valida prerrequisitos, comprueba colección no vacía y emite un resumen JSON sanitizado. Se amplía en cada hito.
 - `scripts/e2e_agent_live.py` para D-01…D-12: se entrega en AV-05, con selección por caso/grupo y proveedores explícitos.
-- Marker opt-in `llm_local` o variable equivalente, registrado al agregar el primer test LLM. Hoy no existe ese marker en pyproject. No usarlo en comandos como si ya seleccionara pruebas.
+- Marker opt-in `llm_local`: **registrado en `pyproject.toml` en AV-01**; `tests/integration/test_agent_live_llm.py` lo usa y no corre por defecto.
 - Gate real exige que tests LLM y PG requeridos hayan corrido y no quedado skipped. «No disponible» significa BLOCKED para el gate, no PASS. Unitarios pueden cerrarse sin red, el hito que exige E2E real no.
+
+### Disponibles desde AV-01
+
+```powershell
+$src = (Get-Location).Path
+# Gate del hito (sin LLM): 84 tests, PASS
+podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  python scripts/verify_agent_live.py --milestone AV-01
+# Gate con smoke LLM real (requiere red del stack y DB migrada con seed)
+podman run --rm --network argentgob-mvp_default `
+  -e "DATABASE_URL=..." -e "OPENAI_API_BASE=http://llama-server:8080/v1" `
+  -e "OPENAI_API_KEY=local-no-key-required" -e "OPENAI_MODEL_NAME=llama-3.1-8b-instruct" `
+  -e "ENVIRONMENT=LOCAL" -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  python scripts/verify_agent_live.py --milestone AV-01 --with-llm
+# Evidencia sanitizada del run real
+podman run --rm --network argentgob-mvp_default ... python scripts/e2e_agent_live_smoke.py --asset AAPL
+# Contrato HTTP contra el servicio desplegado
+podman run --rm --network argentgob-mvp_default ... python scripts/api_check_agent_live.py --base http://agent:8090
+```
 
 Elegir primero el subconjunto afectado, luego regresión completa de cierre. No inventar comandos Ruff/typing ejecutables si no están instalados/configurados; usar tooling del proyecto y registrar limitaciones.
 
@@ -180,3 +199,24 @@ Ejecutado sobre el árbol `f81bd7d` con las imágenes del cierre anterior. Regis
 **Regla derivada:** la evidencia de gate debe ejecutarse sobre una DB de prueba aislada y migrada, no sobre la DB compartida del dashboard. `pending_approvals` ordena por `argued_at ASC` con `limit` acotado, por lo que datos acumulados desplazan la fila recién creada y producen un falso fallo. Crear la DB de prueba, migrarla y sembrar políticas es parte del preflight del gate, no un paso opcional.
 
 **Regla derivada:** un smoke LLM real sobre una DB recién migrada sin `seed_policies` produce `BLOCK`/`NO_POLICY_MATCHED` en todas las tools. Eso es fail-closed correcto, pero no acredita el flujo PASS/HITL. El gate debe verificar `governance_policies > 0` antes de interpretar el resultado del smoke.
+
+## 7. Gate medido en AV-01 (2026-11-10)
+
+Registro completo en [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md). Imagen `localhost/argentgob-mvp-agent:latest` reconstruida antes de validar.
+
+| Verificación | Resultado real | Nota |
+|---|---|---|
+| `scripts/verify_agent_live.py --milestone AV-01` | `collected: 73`, `73 passed`, `PASS` | Sin LLM ni DB |
+| `scripts/verify_agent_live.py --milestone AV-01 --with-llm` | `84 passed` + `1 passed` (LLM), `PASS` | Requiere red del stack y DB migrada con seed |
+| `pytest tests/integration/test_agent_live_llm.py -m llm_local` | `1 passed` | Smoke real, sin monkeypatch del LLM |
+| `scripts/e2e_agent_live_smoke.py --asset MSFT` | `state: SUCCEEDED`, 65 eventos, `E2E AV-01: OK` | Evidencia sanitizada |
+| `scripts/api_check_agent_live.py` | `16 passed, 0 failed` | Contrato HTTP contra el servicio desplegado |
+| `pytest tests/` | **396 passed, 10 skipped** | 7 PG sin `TEST_DATABASE_URL`, 2 AppTest sin `DATABASE_URL`, 1 LLM sin `DATABASE_URL` |
+| `pytest tests/integration/test_postgres_real.py` | 7 passed | DB de prueba aislada |
+| `scripts/e2e_h8_console.py` | 23 passed, 0 failed | DB aislada `argentgob_av01_test`, eliminada al finalizar |
+| `scripts/e2e_fase4_predictive.py` / `e2e_fase5_evidence.py` | 6/6 y 19/19 | |
+| `scripts/validate_corpus.py` | `RESULTADO: OK` | |
+| `scripts/demo_end_to_end.py` | 5 escenarios OK/BLOCK/HITL | Sin LLM |
+| `python -m argentgob.agent.main AAPL --profile analyst` | `agent_run_complete status=SUCCESS` | CLI financiera con LLM real |
+
+**Regla derivada:** el escenario financiero real cierra `PARTIAL` cuando el predictor eleva tentativas a HITL. No es un fallo del run ni del gate: es la agregación del contrato §4. Un gate que exija `SUCCEEDED` en ese escenario estaría midiendo mal.

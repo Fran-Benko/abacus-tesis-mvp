@@ -64,13 +64,21 @@ class ToolCallEnvelope:
         resource: str,
         environment: str,
         execution_arguments: dict[str, Any],
+        *,
+        run_id: str | None = None,
+        session_id: str | None = None,
     ) -> "ToolCallEnvelope":
-        """Construye un envelope calculando tamaño y digest del payload."""
+        """Construye un envelope calculando tamaño y digest del payload.
+
+        AV-01 — Correlación durable: cuando el PEP conoce el run, `session_id`
+        toma el `run_id` para que la evidencia persistida sea correlacionable.
+        Sin run (CLI/tests) se conserva el identificador aleatorio histórico.
+        """
         size = len(json.dumps(execution_arguments, ensure_ascii=False).encode())
         digest = _canonical_digest(execution_arguments)
         return ToolCallEnvelope(
             event_id=str(uuid.uuid4()),
-            session_id=str(uuid.uuid4()),
+            session_id=session_id or run_id or str(uuid.uuid4()),
             agent=agent,
             tool_name=tool_name,
             operation_class=operation_class,

@@ -75,6 +75,15 @@ class GovernedTool(BaseTool):
             # Se expone el envelope actual para que la herramienta pueda
             # verificar la vigencia de la decisi?n durante backoff (R2).
             self._current_envelope = envelope
+            self.governance.emit_event(
+                "tool.started",
+                {
+                    "event_id": envelope.event_id,
+                    "tool": self.name,
+                    "resource": self.resource,
+                    "operation_class": self.operation_class,
+                },
+            )
             try:
                 result = self._execute(**effective)
                 self.governance.post_hook(

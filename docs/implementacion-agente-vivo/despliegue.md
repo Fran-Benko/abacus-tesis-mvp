@@ -2,6 +2,8 @@
 
 **Propuesta para AV-01/02; no describe servicios nuevos ya desplegados.** [Índice](README.md), [contratos](contratos.md), [gates](verificacion.md).
 
+> **Estado AV-01 (2026-11-10):** el servicio HTTP existe como módulo (`python -m argentgob.live.server`, puerto `AGENT_API_PORT`, default 8090) y se validó en un contenedor on-demand sobre la red del proyecto. **`compose.yaml` todavía no declara el servicio `agent` como API persistente**: eso es AV-02. Las variables `AGENT_API_*` de la tabla §2 son las que el módulo lee hoy.
+
 ## 1. Topología
 
 | Servicio | Arranque | Ready / salud | Exposición |
@@ -25,6 +27,8 @@ Los nombres nuevos de esta tabla son **propuestos**: implementarlos/validarlos e
 | `OPENAI_API_BASE` | agent | `http://llama-server:8080/v1`, cerrado por operador, no por usuario |
 | `OPENAI_MODEL_NAME`, clave local | agent | Mantener configuración financiera probada; no function calling nativo sin nuevo smoke |
 | `AGENT_API_BASE` nuevo | dashboard | `http://agent:8090`, configuración interna |
+| `AGENT_API_HOST`, `AGENT_API_PORT` | agent | `0.0.0.0` y `8090`; implementados en `argentgob.live.server` (AV-01) |
+| `AGENT_API_SERVICE_TOKEN` | agent | Token de servicio por cabecera `x-argentgob-service-token`; sin default público. Ausente fuera de LOCAL/TEST → 503 fail-closed |
 | Credencial servicio API nueva | dashboard/agent | Secret montado; sin default público, sin eco ni query string |
 | Identidad/roles H8 | dashboard/agent | Reutilizar mecanismos existentes; fixture solo LOCAL/TEST, explícitamente no autenticación productiva |
 | DB secret canónico | postgres/migrator/agent/dashboard | Archivo de secreto único como fuente, DSN construido con escape correcto; permisos por consumidor |

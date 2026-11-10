@@ -1,6 +1,6 @@
 # Hitos operativos y gates — v3
 
-Estado inicial: **AV-00 completo; AV-01…AV-06 pendientes**. Los nombres técnicos son objetivos, no prueba de existencia. [Contratos](contratos.md), [catálogo](escenarios.md), [despliegue](despliegue.md) y [pruebas](verificacion.md) son lectura aplicable obligatoria.
+Estado inicial: **AV-00 y AV-01 completos; AV-02…AV-06 pendientes**. Los nombres técnicos son objetivos, no prueba de existencia. [Contratos](contratos.md), [catálogo](escenarios.md), [despliegue](despliegue.md) y [pruebas](verificacion.md) son lectura aplicable obligatoria.
 
 ## 1. Dependencias y orden
 
@@ -56,6 +56,10 @@ AV-04 requiere el contrato/callback de AV-01, no necesita esperar a toda la UI. 
 **Gate G-AV-01:** validación negativa sin inferencia/tool, carreras sin duplicados, proceso terminado antes de liberar cupo, evento consultable antes del final y salida segura. Smoke real sin monkeypatch del LLM y regresión financiera/CLI pasan. No exige UI aún.
 
 **Entregables:** servidor/supervisor, contrato de eventos implementado, tests y gate ejecutable, evidencia del smoke; documentación de configuración implementada. No afirmar todavía resume interactivo completo.
+
+**Estado: PASS (2026-11-10).** Evidencia en [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md). Implementado: `argentgob.live` (schemas estrictos, `EventBuffer` con allowlist y anillo acotado, `RunSupervisor` con un proceso hijo por run y canal IPC por socket loopback autenticado, API FastAPI con `/health`, `/ready`, `POST /runs` y `GET /runs/{id}`), observación de fronteras en el PEP (`GovernanceObserver`) y correlación `run_id` → `session_id` en la evidencia persistida. Gate `scripts/verify_agent_live.py --milestone AV-01 --with-llm`: 84 tests + 1 smoke LLM real, PASS. `scripts/api_check_agent_live.py` contra el servicio desplegado: 16/16. Regresión: suite 396 passed + 10 skipped, PG real 7/7, H8 23/23 sobre DB aislada, Fase 4 6/6, Fase 5 19/19, corpus OK, demo determinista 5 escenarios y CLI financiera con LLM real.
+
+**Limitaciones registradas:** el run real terminó `PARTIAL` porque el predictor elevó varias tentativas a HITL (retenidas, sin ejecución); la agregación aplica la regla del contrato §4. `POST /runs/{id}/resume`, la UI y los cinco dominios siguen pendientes (AV-03/AV-05). El cupo es de un run activo global y el buffer vive en memoria del proceso padre: un reinicio del servicio pierde runs y eventos, como declara el contrato.
 
 ## 4. AV-02 — Compose e inicialización reproducibles
 

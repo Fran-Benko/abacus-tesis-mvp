@@ -58,14 +58,14 @@ Demos **D-01…D-12** son nuevas ejecuciones LLM reales propuestas; no se suman 
 | Hito | Estado | Resultado de gate |
 |---|---|---|
 | AV-00 — Baseline operativo y contratos | **Completo** | **PASS** — [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md) |
-| AV-01 — Servicio, supervisor y eventos | Pendiente | No ejecutado |
+| AV-01 — Servicio, supervisor y eventos | **Completo** | **PASS** — [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md) |
 | AV-02 — Stack reproducible | Pendiente | No ejecutado |
 | AV-03 — UI financiera en vivo | Pendiente | No ejecutado |
 | AV-04 — Fronteras PII/IPI | Pendiente | No ejecutado |
 | AV-05 — Dominios, demos reales y HITL | Pendiente | No ejecutado |
 | AV-06 — Regresión y entrega | Pendiente | No ejecutado |
 
-Actualizar esta tabla solo con referencia a evidencia de [cierre](verificacion.md); documentación redactada no equivale a un hito cerrado. AV-00 se cerró con pruebas de aplicación ejecutadas (ver [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md)); los hitos restantes siguen sin evidencia.
+Actualizar esta tabla solo con referencia a evidencia de [cierre](verificacion.md); documentación redactada no equivale a un hito cerrado. AV-00 y AV-01 se cerraron con pruebas de aplicación ejecutadas (ver [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md) y [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md)); los hitos restantes siguen sin evidencia.
 
 ## 6. Hallazgos de AV-00 que condicionan los hitos siguientes
 
@@ -76,7 +76,7 @@ El cierre de AV-00 verificó el baseline y detectó seis brechas que **no** se c
 | El inicializador solo corre `alembic upgrade head`; no ejecuta `seed_policies`. Una DB nueva queda con 0 políticas y toda tool bloquea con `NO_POLICY_MATCHED`. | DB aislada recién migrada: 0 filas en `governance_policies`; smoke LLM real → 30 `BLOCK`/`NO_POLICY_MATCHED`. Tras seed: `PASS`/`HITL` reales. | AV-02 (T-A01, T-A04) |
 | `GovernedResumeService._revalidate` valida solo estado y expiraciones; **no** revalida política vigente, versión/digest ni guardrails, pese a lo que afirma su docstring. | Introspección del código: `policy_version`, `policy_digest`, `guardrail`, `argument_digest` ausentes en `_revalidate`. | AV-05 (T-H06) |
 | `AuditChainAppender` no está cableado al runtime: solo lo instancian tests. | DB del stack: 74 `policy_decisions` vs 1 fila en `audit_chain` (de un E2E H7 manual). | AV-05 (T-D01) |
-| No existe correlación de run: `session_id` es un `uuid4()` por envelope y `run_id` solo vive en logs. | `core/envelope.py::build`; `agent/main.py`. | AV-01 (contrato de eventos) |
+| No existe correlación de run: `session_id` es un `uuid4()` por envelope y `run_id` solo vive en logs. | `core/envelope.py::build`; `agent/main.py`. | **Cerrada en AV-01**: `ToolCallEnvelope.build(..., run_id=...)` usa el `run_id` como `session_id`; verificado en DB (`policy_decisions.session_id` = `run_id` del smoke). |
 | No hay persistencia de liberación de contenido (`content_status`/`control_action`). | `execution_results` solo tiene `status`; ninguna tabla tiene columnas de contenido. | AV-04 (migración `008`) |
 | La identidad HITL no está configurada en el despliegue: `identity_fixture_roles={}` y `authorized_auditor_roles=[]`. | Sonda en el contenedor del dashboard: `resolve(...)` → `blocked/unauthorized`. | AV-02 (T-B03, T-H02) |
 
