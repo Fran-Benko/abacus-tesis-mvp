@@ -204,6 +204,42 @@ podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest 
 
 `verify_live_ui_av03.py` mide la visibilidad incremental con el run todavia activo y falla si supera 3 s; no reutiliza logs ni capturas del resultado final.
 
+### Corrección de precedencia HITL (sesión 0029)
+
+El gate AV-01 exporta `AGENT_API_SERVICE_TOKEN_FILE`; los tests unitarios de
+`test_agent_server.py` deben neutralizar **ambas** formas del token
+(`AGENT_API_SERVICE_TOKEN` y `AGENT_API_SERVICE_TOKEN_FILE`) o heredan
+autenticación obligatoria y fallan con 401. El fixture `client` ya lo hace.
+
+Comandos de la corrección:
+
+```powershell
+$src = (Get-Location).Path
+# Suite completa (474 passed + 10 skipped)
+podman run --rm -v "${src}:/app:Z" -w /app localhost/argentgob-mvp-agent:latest `
+  pytest tests/ -q -p no:cacheprovider
+# Gate AV-01 con DB y LLM reales (86 tests + 1 smoke)
+podman run --rm --network argentgob-mvp_default `
+  -e "DATABASE_URL=..." -e "OPENAI_API_BASE=http://llama-server:8080/v1" `
+  -e "AGENT_API_BASE=http://agent:8090" `
+  -e "AGENT_API_SERVICE_TOKEN_FILE=/run/secrets/service_token" `
+  -v "${src}/.secrets:/run/secrets:ro,Z" -v "${src}:/app:Z" -w /app `
+  localhost/argentgob-mvp-agent:latest `
+  python scripts/verify_agent_live.py --milestone AV-01 --with-llm
+# Fase 4 y H8 requieren el secreto administrativo (escrituras administrativas)
+podman run --rm --network argentgob-mvp_default `
+  -e "ARGENTGOB_ADMIN_PASSWORD_FILE=/run/secrets/postgres_password" `
+  -e "ARGENTGOB_RUNTIME_PASSWORD_FILE=/run/secrets/runtime_password" `
+  -e "ARGENTGOB_DB_HOST=postgres" `
+  -v "${src}/.secrets:/run/secrets:ro,Z" -v "${src}:/app:Z" -w /app `
+  localhost/argentgob-mvp-agent:latest python scripts/e2e_fase4_predictive.py
+```
+
+Oráculo de la corrección: un run real debe cerrar `SUCCEEDED` con 0 approvals
+cuando la política aplicada declara `sensitivity_limit` igual o superior a la
+clase predicha. `news` bajo `POL-analyst-001` debe decidir `PASS`; `HITL`/`HIGH`
+solo aparecen bajo políticas más estrictas (`POL-analyst-news`).
+
 ## 4. Evidencia de cierre
 
 Por gate, conservar en ubicación de evidencia acordada por el proyecto (fuera del repo para logs temporales) un resumen machine-readable sin payloads:

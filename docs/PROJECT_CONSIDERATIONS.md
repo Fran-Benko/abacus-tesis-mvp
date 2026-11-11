@@ -68,7 +68,7 @@ baseline 71 → R4 +7 = 78 → R5 +8 +1 logger = 87 → H5 +15 = 102 → H6 +24 
 → H7 +24 unit = 150 → H8 +42 = **192 passed** (unit).
 
 > **Cifra oficial actual (verificada, AV-03):** la suite completa
-> `pytest tests/` reporta **473 passed + 10 skipped** (2026-11-10). Los 10
+> `pytest tests/` reporta **474 passed + 10 skipped** (2026-11-11). Los 10
 > skipped son por ausencia de `TEST_DATABASE_URL` / `DATABASE_URL` (ver §7
 > Límites): 7 de `test_postgres_real.py`, 2 de `test_dashboard_apptest.py` y 1
 > de `test_agent_live_llm.py`.
@@ -334,7 +334,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
   2026-11-10: gate `scripts/verify_live_ui_av03.py` **18/18** contra el stack
   desplegado con LLM real (visibilidad incremental 0.01 s con el run en
   `RUNNING`), gate `scripts/verify_agent_live.py --milestone AV-03 --with-llm`
-  PASS (109 tests + 1 smoke LLM real), suite **473 passed + 10 skipped**, PG
+  PASS (109 tests + 1 smoke LLM real), suite **474 passed + 10 skipped**, PG
   real 7/7, H8 23/23, Fase 4 6/6, Fase 5 19/19, corpus OK, demo determinista 5
   escenarios, CLI financiera `status=SUCCESS` y cadena de auditoría íntegra.
   Implementa `argentgob.dashboard.live_client`, `live_session` y la vista
@@ -441,7 +441,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 | H8 | Consola sanitizada y resolución autorizada | ✅ Implementada y verificada | migración 004, `src/argentgob/console/` + `identity/`, E2E 23/23 |
 | H9 | Integración con CrewAI (GovernedTool) | ✅ Implementada y verificada | `src/argentgob/module_a/governed_tool.py`, `test_crewai_real.py` |
 | H10 | Dashboard de monitoreo (5 vistas, ECharts, auto-refresh) | ✅ Implementada y verificada | `src/argentgob/dashboard/`, AppTest, browser |
-| H11 | Suite de tests unitarios e integración | ✅ Implementada (**473 passed + 10 skipped**) | `pytest tests/` (verificado 2026-11-10, AV-02) |
+| H11 | Suite de tests unitarios e integración | ✅ Implementada (**474 passed + 10 skipped**) | `pytest tests/` (verificado 2026-11-11, sesión 0029) |
 | H12 | Corpus predictivo versionado (sintético) | ✅ Implementada y verificada | `data/corpus/corpus_v1.parquet` + `corpus_manifest.json` (seed 42, hash congelado), `validate_corpus.py` OK |
 | H13 | Preparación de features (27, pre-ejecución, anti-leakage) | ✅ Implementada y verificada | `src/argentgob/analytics/features.py` (FeatureBuilder) |
 | H14 | Entrenamiento/calibración/evaluación del modelo | ✅ Implementada y verificada | `scripts/train_risk_model.py`, `data/models/risk_model_v1/` (pipeline.joblib, thresholds.json, metrics) |
@@ -450,8 +450,8 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 ### 8.2 Migraciones aplicadas
 
-`001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 009 → 010 (head)` — verificable con
-`python -m alembic current` (`010 (head)`).
+`001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 009 → 010 → 011 (head)` — verificable con
+`python -m alembic current` (`011 (head)`).
 
 | Migración | Contenido |
 |---|---|
@@ -467,7 +467,7 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 | Verificación | Resultado |
 |---|---|
-| `pytest tests/` (suite completa, imagen reconstruida) | **473 passed + 10 skipped** (AV-03, 2026-11-10) |
+| `pytest tests/` (suite completa, imagen reconstruida) | **474 passed + 10 skipped** (sesión 0029, 2026-11-11) |
 | E2E H8 (`scripts/e2e_h8_console.py`) | 23/23 checks OK (sobre DB de prueba limpia; 22/23 sobre la DB compartida por acumulación de approvals PENDING) |
 | E2E Fase 4 (`scripts/e2e_fase4_predictive.py`) | 6/6 checks OK |
 | E2E Fase 5 (`scripts/e2e_fase5_evidence.py`) | 19/19 checks OK |
@@ -607,8 +607,8 @@ dominios, congelado, anti-circularidad).
   prioridad alta (criterios, HITL E2E, PG real, concurrencia, CrewAI real),
   prioridad media (deriva PSI, políticas YAML, demo E2E 5 escenarios) y
   rediseño UX/UI v4.
-- **Tests:** suite completa verificada **473 passed + 10 skipped** (ver §3.1).
-- **Migraciones:** 001 → **010 (head)** (ver §8.2).
+- **Tests:** suite completa verificada **474 passed + 10 skipped** (ver §3.1).
+- **Migraciones:** 001 → **011 (head)** (ver §8.2).
 - **E2E:** H8 23/23 · Fase 4 6/6 · Fase 5 19/19 · demo 5/5 escenarios.
 - **Dashboard:** 5 vistas multipágina (ver §10.3).
 

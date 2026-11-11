@@ -60,7 +60,7 @@ Demos **D-01…D-12** son nuevas ejecuciones LLM reales propuestas; no se suman 
 | AV-00 — Baseline operativo y contratos | **Completo** | **PASS** — [sesión 0025](../sessions/0025-resumen-av-00-baseline-contratos.md) |
 | AV-01 — Servicio, supervisor y eventos | **Completo** | **PASS** — [sesión 0026](../sessions/0026-resumen-av-01-servicio-supervisor-eventos.md) |
 | AV-02 — Stack reproducible | **Completo** | **PASS** — [sesión 0027](../sessions/0027-resumen-av-02-compose-inicializacion.md) |
-| AV-03 — UI financiera en vivo | **Completo** | **PASS** — [sesión 0028](../sessions/0028-resumen-av-03-ui-financiera-en-vivo.md) |
+| AV-03 — UI financiera en vivo | **Completo** | **PASS** — [sesión 0028](../sessions/0028-resumen-av-03-ui-financiera-en-vivo.md); corrección de precedencia HITL en [sesión 0029](../sessions/0029-resumen-fix-precedencia-hitl.md) |
 | AV-04 — Fronteras PII/IPI | Pendiente | No ejecutado |
 | AV-05 — Dominios, demos reales y HITL | Pendiente | No ejecutado |
 | AV-06 — Regresión y entrega | Pendiente | No ejecutado |

@@ -151,6 +151,16 @@ Un run ocupa el cupo también en WAITING_APPROVAL. Cada run tiene contador, midd
 
 En la ruta actual, HITL puede elevarse antes de recorrer guardrails. AV-05 debe demostrar que controles duros no se omiten tras aprobación, con ajuste mínimo de esa ruta y regresión de precedencia. Un token válido no autoriza un payload que ahora debe bloquearse.
 
+### 5.0 Precedencia predictiva y `sensitivity_limit` (corregido 2026-11-11)
+
+La elevación `MEDIUM → HITL` **no es incondicional**. El PEP compara la clase predicha con el `sensitivity_limit` que declara la política aplicada (`PolicyDecision.sensitivity_limit`, propagado por `DeterministicEvaluator` desde `best.policy.sensitivity_limit`):
+
+- Predicción `HIGH` con límite `LOW`/`MEDIUM` → `BLOCK` (`PREDICTED_HIGH_RISK`).
+- Predicción `MEDIUM` con límite `LOW` → `HITL` (`PREDICTED_MEDIUM_RISK`).
+- Predicción dentro del límite declarado → se conserva la decisión determinista (`PASS` si el motor determinista ya autorizó).
+
+Antes de esta corrección el PEP elevaba toda predicción `MEDIUM` sin consultar el límite, lo que retenía llamadas que la política autorizaba (`POL-analyst-001`, `news`, `sensitivity_limit=MEDIUM`), provocaba reintentos de CrewAI y cerraba el run en `PARTIAL` con approvals duplicadas. La regla de agregación §4 no cambió: sigue siendo correcta. Ver [sesión 0029](../sessions/0029-resumen-fix-precedencia-hitl.md).
+
 ### 5.1 Estado verificado en AV-00 (2026-11-10)
 
 `GovernedResumeService._revalidate` valida **solo** `approval.state == APPROVED` y las expiraciones de approval y token. No revalida política vigente, `policy_version`/`policy_digest` ni guardrails, pese a lo que afirma su docstring. El `argument_digest` se contrasta en `_require_hold` únicamente entre el hold y la aprobación, no contra la decisión persistida.
