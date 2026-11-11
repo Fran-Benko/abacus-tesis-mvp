@@ -65,7 +65,7 @@ def test_migraciones_en_head(pg_conn):
         cur.execute("SELECT version_num FROM alembic_version")
         row = cur.fetchone()
     assert row is not None, "alembic_version no existe"
-    assert row[0] == "010", f"head esperado 010, got {row[0]}"
+    assert row[0] == "011", f"head esperado 011, got {row[0]}"
 
 
 @requires_pg

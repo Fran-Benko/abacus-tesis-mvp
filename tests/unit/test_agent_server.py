@@ -1,4 +1,4 @@
-"""Tests de la API interna de runs (AV-01, T-B01/T-B02/T-B03/T-B05/T-B09).
+﻿"""Tests de la API interna de runs (AV-01, T-B01/T-B02/T-B03/T-B05/T-B09).
 
 Usan `TestClient` de FastAPI con un supervisor de hijo falso: no hay LLM ni red.
 """
@@ -108,10 +108,20 @@ def _spawn_ok(ctx, ipc):
     return handle
 
 
+def _clear_service_token(monkeypatch) -> None:
+    """Neutraliza el token de servicio en ambas formas (valor y archivo).
+
+    El gate AV-01 exporta `AGENT_API_SERVICE_TOKEN_FILE`; si no se limpia, los
+    tests unitarios heredan autenticación obligatoria y fallan con 401.
+    """
+    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN_FILE", raising=False)
+
+
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "TEST")
-    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN", raising=False)
+    _clear_service_token(monkeypatch)
     supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
     app = create_app(supervisor, readiness=_ReadyStack())
     with TestClient(app) as test_client:
@@ -241,6 +251,7 @@ def test_idempotencia_conflictiva_409(client):
 def test_token_de_servicio_requerido_cuando_esta_configurado(monkeypatch):
     """Con token configurado, sin cabecera se rechaza (401)."""
     monkeypatch.setenv("ENVIRONMENT", "TEST")
+    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN_FILE", raising=False)
     monkeypatch.setenv("AGENT_API_SERVICE_TOKEN", "secreto-de-prueba")
     supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
     app = create_app(supervisor, readiness=_ReadyStack())
@@ -274,7 +285,7 @@ class _NotReadyStack(_ReadyStack):
 def test_stack_no_inicializado_no_admite_runs(monkeypatch):
     """Sin esquema/cat?logo, /ready es False y POST /runs responde 503."""
     monkeypatch.setenv("ENVIRONMENT", "TEST")
-    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN", raising=False)
+    _clear_service_token(monkeypatch)
     supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
     app = create_app(supervisor, readiness=_NotReadyStack())
     with TestClient(app) as test_client:
@@ -304,7 +315,7 @@ class _NoLlmStack(_ReadyStack):
 def test_sin_llm_no_admite_runs_pero_sigue_diagnosticando(monkeypatch):
     """Sin LLM: /health y /ready responden; POST /runs responde 503."""
     monkeypatch.setenv("ENVIRONMENT", "TEST")
-    monkeypatch.delenv("AGENT_API_SERVICE_TOKEN", raising=False)
+    _clear_service_token(monkeypatch)
     supervisor = RunSupervisor(spawn=_spawn_ok, ipc_factory=_FakeIpc)
     app = create_app(supervisor, readiness=_NoLlmStack())
     with TestClient(app) as test_client:

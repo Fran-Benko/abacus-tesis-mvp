@@ -232,10 +232,32 @@ def test_precedencia_medium_hitl(settings, mock_audit_writer):
     mw = _middleware_with_predictor(settings, mock_audit_writer, predictor, builder)
     spy = SpyTool(governance=mw, agent_identity=AgentIdentity(id="a-1", role="analyst"))
     spy.name = "news"
+    # Query dentro del rango entrenado del corpus (13-66 caracteres) para que
+    # la guarda de extrapolación no se active y la predicción MEDIUM se aplique.
     with pytest.raises(HookAborted) as exc:
-        spy._run(query="bitcoin")
+        spy._run(query="bitcoin precio mercado hoy")
     assert spy.call_count == 0
     assert "HUMAN_APPROVAL_REQUIRED" in exc.value.reason
+    mock_audit_writer.record_decision.assert_called()
+
+
+@requires_model
+def test_guarda_extrapolacion_degrada_a_fallback(settings, mock_audit_writer):
+    """Una query fuera del rango entrenado hace que el predictor se abstenga.
+
+    El `StandardScaler` no acota la entrada: sin guarda, una query corta
+    (p. ej. "AAPL") extrapola y eleva a HITL llamadas legítimas. La guarda
+    devuelve `None` y el PEP decide con el motor determinista (fail-closed).
+    """
+    predictor = RiskPredictor()
+    builder = FeatureBuilder()
+    mw = _middleware_with_predictor(settings, mock_audit_writer, predictor, builder)
+    spy = SpyTool(governance=mw, agent_identity=AgentIdentity(id="a-1", role="analyst"))
+    spy.name = "news"
+    # "AAPL" mide 4 caracteres: por debajo del mínimo del corpus (13).
+    spy._run(query="AAPL")
+    assert spy.call_count == 1
+    # El motor determinista autorizó (PASS) y no hubo elevación a HITL.
     mock_audit_writer.record_decision.assert_called()
 
 

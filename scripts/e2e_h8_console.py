@@ -200,7 +200,9 @@ def main():
     check("view row present", vrow is not None)
 
     # ── Limpieza ──────────────────────────────────────────────────────
-    conn = get_connection()
+    # El rol de runtime no tiene DELETE (migración 008): la limpieza de
+    # evidencia de prueba es una operación administrativa.
+    conn = get_connection(role="admin")
     with conn.cursor() as cur:
         cur.execute("DELETE FROM approval_requests WHERE approval_id = %(a)s",
                     {"a": approval_id})

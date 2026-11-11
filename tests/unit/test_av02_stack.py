@@ -113,7 +113,7 @@ class _FakeCursor:
 class _FakeConn:
     """Conexión falsa que responde a las consultas del inicializador."""
 
-    def __init__(self, *, revision="010", policies=8, roles=None):
+    def __init__(self, *, revision="011", policies=8, roles=None):
         self.revision = revision
         self.policies = policies
         self.roles = roles if roles is not None else {
@@ -148,7 +148,7 @@ class _FakeConn:
 def test_verify_ok_con_head_catalogo_y_roles():
     report = verify(lambda: _FakeConn())
     assert report.ok is True
-    assert report.revision == "010"
+    assert report.revision == "011"
     assert report.policies == 8
 
 

@@ -79,15 +79,17 @@ _PII_PATTERNS = [
     (re.compile(r"\b[0-9]{7,8}\b"), "POSSIBLE_DNI"),
 ]
 
-# Sensibilidad por operation_class (espejo del corpus).
-_SENSITIVITY_BY_OPERATION = {
-    "READ": 1,
-    "EXTERNAL_SEND": 2,
-    "WRITE": 3,
-    "DELETE": 4,
-    "DDL": 5,
-    "CODE_EXEC": 5,
-}
+# Sensibilidad máxima permitida por las políticas coincidentes.
+#
+# El corpus de entrenamiento (`scripts/build_synthetic_corpus.py`) codifica
+# `control.max_allowed_sensitivity` como indicador ordinal 0/1: 1 cuando existe
+# al menos una política coincidente y 0 cuando no hay ninguna. La inferencia
+# debe reproducir esa misma codificación; usar la severidad del
+# `operation_class` (READ=1, EXTERNAL_SEND=2, ...) desplazaba la feature fuera
+# del rango entrenado y producía train/serve skew: `news` (EXTERNAL_SEND)
+# recibía 2 y el modelo lo clasificaba MEDIUM en casi todos los casos.
+_SENSITIVITY_WITH_POLICY = 1
+_SENSITIVITY_WITHOUT_POLICY = 0
 
 
 def _flatten(obj: Any) -> list[Any]:
@@ -105,12 +107,19 @@ def _flatten(obj: Any) -> list[Any]:
 
 
 def _json_depth(obj: Any) -> int:
-    """Profundidad máxima de la estructura JSON (dict/list)."""
+    """Profundidad máxima de la estructura JSON (1 = escalar).
+
+    Debe coincidir con `scripts/build_synthetic_corpus.py::json_depth`, que es
+    el que generó el corpus de entrenamiento. Un escalar vale 1 y un dict
+    `{"query": "AAPL", "max_results": 3}` vale 2. Contar el escalar como 0
+    desplazaba la feature un nivel por debajo del rango entrenado y sesgaba la
+    inferencia (train/serve skew).
+    """
     if isinstance(obj, dict):
         return 1 + max((_json_depth(v) for v in obj.values()), default=0)
     if isinstance(obj, list):
         return 1 + max((_json_depth(v) for v in obj), default=0)
-    return 0
+    return 1
 
 
 def _dominant_type(values: list[Any]) -> str:
@@ -220,13 +229,8 @@ class FeatureBuilder:
                 matched = len(matches)
                 if matches:
                     policy_active = any(p.is_active() for p in matches)
-                    max_sensitivity = max(
-                        (
-                            _SENSITIVITY_BY_OPERATION.get(p.operation_class, 0)
-                            for p in matches
-                        ),
-                        default=0,
-                    )
+                    # Misma codificación ordinal 0/1 que el corpus entrenado.
+                    max_sensitivity = _SENSITIVITY_WITH_POLICY
                     # Conflicto: obligaciones incompatibles entre políticas.
                     seen: dict[str, set[str]] = {}
                     for p in matches:

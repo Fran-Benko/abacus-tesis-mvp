@@ -250,6 +250,7 @@ class DeterministicEvaluator:
             effective_priority=best.policy.priority,
             obligations=best.policy.obligations,
             transform_spec=best.policy.transform_spec,
+            sensitivity_limit=best.policy.sensitivity_limit,
         )
 
     @staticmethod

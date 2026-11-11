@@ -46,6 +46,16 @@ def _argument_digest(args: Any) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _risk_rank(level: Any) -> int:
+    """Orden de severidad para comparar `sensitivity_limit` con la predicción.
+
+    Espeja `DeterministicEvaluator._risk_rank` para que el PEP y el motor
+    determinista comparen con la misma escala (LOW=1, MEDIUM=2, HIGH=3).
+    """
+    value = getattr(level, "value", level)
+    return {"LOW": 1, "MEDIUM": 2, "HIGH": 3}.get(str(value).upper(), 0)
+
+
 class GovernanceMiddleware:
     """Punto de enforcement síncrono que decide PASS o BLOCK."""
 
@@ -201,12 +211,23 @@ class GovernanceMiddleware:
         #    4) Predicción LOW → PASS (mantiene la decisión determinista).
         prediction = envelope.prediction
         if prediction is not None and decision.action != GovernanceAction.BLOCK:
-            if prediction.predicted_risk_class == "HIGH":
+            # La política puede declarar una sensibilidad máxima admitida
+            # (`sensitivity_limit`). Una predicción dentro de ese límite ya
+            # está autorizada por la política: no se eleva a HITL. El motor
+            # determinista ya bloqueó con SENSITIVITY_EXCEEDED si la supera.
+            limit = getattr(decision, "sensitivity_limit", None)
+            within_limit = (
+                limit is not None
+                and _risk_rank(prediction.predicted_risk_class)
+                <= _risk_rank(limit)
+            )
+            if prediction.predicted_risk_class == "HIGH" and not within_limit:
                 decision.action = GovernanceAction.BLOCK
                 decision.reason_code = ReasonCode.PREDICTED_HIGH_RISK
             elif (
                 prediction.predicted_risk_class == "MEDIUM"
                 and decision.action == GovernanceAction.PASS
+                and not within_limit
             ):
                 decision.action = GovernanceAction.HITL
                 decision.reason_code = ReasonCode.PREDICTED_MEDIUM_RISK

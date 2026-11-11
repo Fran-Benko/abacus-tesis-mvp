@@ -8,9 +8,16 @@ Verifica end-to-end (con PostgreSQL real vía red argentgob-mvp_default):
 3. Precedencias: HIGH → BLOCK (call_count 0), MEDIUM → HITL, LOW → PASS.
 4. Fallback fail-closed: sin modelo disponible, el determinista decide.
 
+El registro de la versión del modelo es una escritura administrativa: el rol de
+runtime solo tiene SELECT sobre `risk_model_versions` (migración 008). Por eso
+este script resuelve el DSN con `role="admin"` y requiere el secreto
+administrativo montado.
+
 Uso:
     podman run --rm --network argentgob-mvp_default \\
-        -e DATABASE_URL=... -v "${PWD}:/app:Z" -w /app \\
+        -e ARGENTGOB_ADMIN_PASSWORD_FILE=/run/secrets/postgres_password \\
+        -e ARGENTGOB_DB_HOST=postgres \\
+        -v "${PWD}/.secrets:/run/secrets:ro,Z" -v "${PWD}:/app:Z" -w /app \\
         localhost/argentgob-mvp-agent:latest python scripts/e2e_fase4_predictive.py
 """
 from __future__ import annotations
@@ -50,7 +57,8 @@ def register_model_version(settings) -> str | None:
         return None
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     try:
-        conn = get_connection()
+        # Escritura administrativa: el rol de runtime no puede INSERT aquí.
+        conn = get_connection(role="admin")
         try:
             with conn.cursor() as cur:
                 cur.execute(

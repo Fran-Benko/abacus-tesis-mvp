@@ -33,6 +33,31 @@ TARGET_ORDER = ["LOW", "MEDIUM", "HIGH"]
 DEFAULT_MODEL_DIR = (
     Path(__file__).resolve().parents[3] / "data" / "models" / "risk_model_v1"
 )
+DEFAULT_CORPUS_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "corpus" / "corpus_v1.parquet"
+)
+
+# Features numéricas cuyo rango de entrenamiento se verifica antes de inferir.
+# Un valor fuera del rango observado en el corpus hace que el modelo extrapole
+# (un `StandardScaler` no acota la entrada) y produzca clases que nunca vio.
+# La guarda hace que el predictor se abstenga y decida el motor determinista.
+_OOD_NUMERIC_FEATURES: tuple[str, ...] = (
+    "payload.payload_size_bytes",
+    "payload.arg_count",
+    "payload.json_depth",
+    "payload.sanitized_text_length",
+    "payload.pii_category_count",
+    "context.hour_bucket",
+    "control.matched_policy_count",
+    "control.max_allowed_sensitivity",
+    "control.rate_limit_consumption",
+)
+
+# Banda de tolerancia de la guarda de extrapolación: proporción del ancho del
+# rango entrenado y mínimo absoluto. Evita rechazar llamadas legítimas apenas
+# fuera del borde sin permitir extrapolaciones grandes.
+_OOD_MARGIN_RATIO = 0.25
+_OOD_MARGIN_MIN = 2.0
 
 
 def resolve_model_dir() -> Path:
@@ -46,6 +71,14 @@ def resolve_model_dir() -> Path:
 
     configured = os.environ.get("RISK_MODEL_DIR")
     return Path(configured) if configured else DEFAULT_MODEL_DIR
+
+
+def resolve_corpus_path() -> Path:
+    """Corpus congelado: `RISK_CORPUS_PATH` o el layout del repo (AV-02)."""
+    import os
+
+    configured = os.environ.get("RISK_CORPUS_PATH")
+    return Path(configured) if configured else DEFAULT_CORPUS_PATH
 
 
 @dataclass
@@ -64,14 +97,24 @@ class RiskPrediction:
 class RiskPredictor:
     """Carga el pipeline y predice el riesgo de una tool call."""
 
-    def __init__(self, model_dir: Path | str | None = None):
+    def __init__(
+        self,
+        model_dir: Path | str | None = None,
+        corpus_path: Path | str | None = None,
+    ):
         self.model_dir = Path(model_dir) if model_dir else resolve_model_dir()
+        self.corpus_path = (
+            Path(corpus_path) if corpus_path else resolve_corpus_path()
+        )
         self._pipeline: Any = None
         self._threshold: float = 0.3
         self._default_class: str = "LOW"
         self._meta: dict[str, Any] = {}
         self._loaded = False
+        # Rangos de entrenamiento por herramienta (guarda de extrapolación).
+        self._feature_ranges: dict[str, dict[str, tuple[float, float]]] = {}
         self._load()
+        self._load_feature_ranges()
 
     def _load(self) -> None:
         """Carga pipeline, umbrales y metadatos. Degrada a no-disponible."""
@@ -107,6 +150,87 @@ class RiskPredictor:
                 model_dir=str(self.model_dir),
             )
             self._loaded = False
+
+    def _load_feature_ranges(self) -> None:
+        """Carga los rangos de entrenamiento por herramienta desde el corpus.
+
+        El `StandardScaler` del pipeline no acota la entrada: un valor fuera del
+        rango observado hace que el modelo extrapole y emita clases que nunca
+        vio. Guardar los rangos permite abstenerse (fallback determinista) en
+        lugar de elevar a HITL llamadas legítimas por extrapolación.
+
+        Degrada de forma segura: si el corpus no está disponible, no se aplica
+        guarda y el comportamiento es el histórico.
+        """
+        try:
+            import pandas as pd
+
+            if not self.corpus_path.exists():
+                log.info(
+                    "riskpredictor_ranges_unavailable",
+                    corpus_path=str(self.corpus_path),
+                )
+                return
+            df = pd.read_parquet(self.corpus_path)
+            if "context.tool_name" not in df.columns:
+                return
+            ranges: dict[str, dict[str, tuple[float, float]]] = {}
+            for tool, sub in df.groupby("context.tool_name"):
+                tool_ranges: dict[str, tuple[float, float]] = {}
+                for feat in _OOD_NUMERIC_FEATURES:
+                    if feat not in sub.columns:
+                        continue
+                    series = sub[feat].dropna()
+                    if series.empty:
+                        continue
+                    tool_ranges[feat] = (
+                        float(series.min()),
+                        float(series.max()),
+                    )
+                if tool_ranges:
+                    ranges[str(tool)] = tool_ranges
+            self._feature_ranges = ranges
+            log.info(
+                "riskpredictor_ranges_loaded",
+                tools=sorted(ranges),
+            )
+        except Exception as exc:  # noqa: BLE001 - degradación segura
+            log.warning(
+                "riskpredictor_ranges_failed",
+                detail=str(exc),
+                corpus_path=str(self.corpus_path),
+            )
+            self._feature_ranges = {}
+
+    def _out_of_distribution(
+        self, features: dict[str, Any]
+    ) -> tuple[bool, list[str]]:
+        """True si alguna feature numérica cae lejos del rango entrenado.
+
+        Se aplica una banda de tolerancia (`_OOD_MARGIN_RATIO` del ancho del
+        rango, con mínimo absoluto) para no rechazar llamadas legítimas apenas
+        por debajo o por encima del borde observado. Solo se evalúan las
+        herramientas presentes en el corpus; una herramienta desconocida no se
+        considera fuera de distribución (el motor determinista sigue siendo la
+        autoridad).
+        """
+        tool = features.get("context.tool_name")
+        tool_ranges = self._feature_ranges.get(str(tool)) if tool else None
+        if not tool_ranges:
+            return False, []
+        outside: list[str] = []
+        for feat, (lo, hi) in tool_ranges.items():
+            value = features.get(feat)
+            if value is None:
+                continue
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            margin = max(_OOD_MARGIN_RATIO * (hi - lo), _OOD_MARGIN_MIN)
+            if numeric < lo - margin or numeric > hi + margin:
+                outside.append(feat)
+        return bool(outside), outside
 
     @property
     def available(self) -> bool:
@@ -166,6 +290,16 @@ class RiskPredictor:
         import time
 
         if not self.available:
+            return None
+        # Guarda de extrapolación: fuera del rango entrenado el modelo no
+        # opina. El PEP degrada a fallback determinista fail-closed.
+        outside, features_out = self._out_of_distribution(features)
+        if outside:
+            log.info(
+                "riskpredictor_out_of_distribution",
+                tool=features.get("context.tool_name"),
+                features=features_out,
+            )
             return None
         started = time.perf_counter()
         proba = self.predict_proba(features)

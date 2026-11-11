@@ -147,6 +147,9 @@ services:
       ARGENTGOB_DB_HOST: postgres
       ARGENTGOB_DB_PORT: "5432"
       ARGENTGOB_DB_NAME: argentgob
+      # Rol de solo lectura: sin esto `get_connection()` cae al DSN de runtime
+      # (secreto no montado aquí) y termina en el DATABASE_URL de .env.
+      ARGENTGOB_DB_ROLE: dashboard
       AGENT_API_BASE: "http://agent:8090"
       # AV-03: el dashboard consume la API de runs con el token de servicio.
       AGENT_API_SERVICE_TOKEN_FILE: /run/secrets/service_token

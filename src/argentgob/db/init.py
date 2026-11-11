@@ -33,7 +33,7 @@ from argentgob.observability.logger import get_logger, setup_logging
 
 log = get_logger("db_init")
 
-EXPECTED_HEAD = "010"
+EXPECTED_HEAD = "011"
 MIN_POLICIES = 1
 
 

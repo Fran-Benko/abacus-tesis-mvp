@@ -19,6 +19,20 @@ from argentgob.identity.provider import AuditorIdentityProvider
 from argentgob.identity.roles import AppRole
 
 
+def _valor_texto(valor) -> str:
+    """Normaliza un valor de detalle a texto seguro para la tabla.
+
+    El detalle mezcla tipos (int, bool, str, None); pyarrow falla al
+    serializar una columna con tipos mixtos. Se conserva el valor legible sin
+    exponer estructuras crudas.
+    """
+    if valor is None:
+        return "—"
+    if isinstance(valor, bool):
+        return "sí" if valor else "no"
+    return str(valor)
+
+
 def _build_services():
     settings = get_settings()
     identity = AuditorIdentityProvider(
@@ -156,11 +170,16 @@ def render() -> None:
             try:
                 det = detail.get_detail(approval_id=selected)
                 st.markdown("**Detalle sanitizado**")
-                st.dataframe(
-                    pd.DataFrame([det]).T.reset_index().rename(columns={"index": "Campo", 0: "Valor"}),
-                    use_container_width=True,
-                    height=220,
+                # Los valores mezclan tipos (int, bool, str, None); se
+                # normalizan a texto para que pyarrow no falle al serializar
+                # una columna con tipos mixtos.
+                detalle = pd.DataFrame(
+                    [
+                        {"Campo": campo, "Valor": _valor_texto(valor)}
+                        for campo, valor in det.items()
+                    ]
                 )
+                st.dataframe(detalle, use_container_width=True, height=220)
             except Exception as exc:  # noqa: BLE001
                 st.warning(f"No se pudo cargar el detalle: {exc}")
 

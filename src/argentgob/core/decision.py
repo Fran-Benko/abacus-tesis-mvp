@@ -43,6 +43,7 @@ class PolicyDecision:
         transform_spec: dict[str, Any] | None = None,
         decided_at: datetime | None = None,
         expires_at: datetime | None = None,
+        sensitivity_limit: str | None = None,
     ):
         self.decision_id = decision_id or str(uuid.uuid4())
         self.action = action
@@ -63,6 +64,10 @@ class PolicyDecision:
         self.transform_spec = transform_spec
         self.decided_at = decided_at or datetime.now(timezone.utc)
         self.expires_at = expires_at
+        # Sensibilidad máxima declarada por la política que autorizó (PASS).
+        # El PEP la usa para no elevar a HITL una predicción que la política
+        # ya admite explícitamente.
+        self.sensitivity_limit = sensitivity_limit
 
     # ── Compatibilidad con R2 (campo singular) ────────────────────────
     @property
@@ -101,6 +106,7 @@ class PolicyDecision:
             "transform_spec": self.transform_spec,
             "decided_at": self.decided_at.isoformat(),
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "sensitivity_limit": self.sensitivity_limit,
         }
 
     @classmethod
@@ -123,6 +129,7 @@ class PolicyDecision:
             expires_at=(
                 _parse_utc(data["expires_at"]) if data.get("expires_at") else None
             ),
+            sensitivity_limit=data.get("sensitivity_limit"),
         )
 
 
