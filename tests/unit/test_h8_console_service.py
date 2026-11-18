@@ -180,12 +180,21 @@ def test_metrics_conteos_y_percentiles():
 
 def test_pending_approvals():
     rows = [_approval_row("appr-1"), _approval_row("appr-2")]
-    svc = _service(lambda sql, params=None: rows)
+    captured = {}
+
+    def route(sql, params=None):
+        captured["sql"] = sql
+        return rows
+
+    svc = _service(route)
     result = svc.pending_approvals()
     assert len(result) == 2
     # No expone argumentos en claro.
     assert all("argument_digest" in r for r in result)
     assert all("execution_arguments" not in r for r in result)
+    # Las vencidas no cuentan como pendientes accionables (las informa
+    # `expired_approvals`), de modo que el backlog no desplaza a la nueva.
+    assert "expires_at > now()" in captured["sql"]
 
 
 def test_expired_approvals():

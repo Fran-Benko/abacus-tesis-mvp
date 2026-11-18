@@ -187,7 +187,12 @@ class ConsoleQueryService:
 
     # â”€â”€ Approvals PENDING / vencidas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def pending_approvals(self, *, limit: int = 100) -> list[dict[str, Any]]:
-        """Lista approvals PENDING (solo campos autorizados, sin argumentos)."""
+        """Lista approvals PENDING vigentes (solo campos autorizados, sin argumentos).
+
+        Excluye las vencidas: `expired_approvals` las informa por separado, de
+        modo que el backlog histórico no desplaza a las aprobaciones accionables
+        ni se duplica en la UI.
+        """
         sql = """
             SELECT
                 approval_id,
@@ -202,6 +207,7 @@ class ConsoleQueryService:
                 expires_at
             FROM approval_requests
             WHERE state = 'PENDING'
+              AND (expires_at IS NULL OR expires_at > now())
             ORDER BY argued_at ASC
             LIMIT %(limit)s
         """
