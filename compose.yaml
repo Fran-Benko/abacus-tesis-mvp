@@ -80,9 +80,6 @@ services:
       - postgres_password
       - runtime_password
       - dashboard_password
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: "no"
 
   # --- API interna de runs (persistente) -------------------------------
@@ -161,6 +158,9 @@ services:
       RISK_CORPUS_PATH: "/app/data/corpus/corpus_v1.parquet"
     secrets:
       - dashboard_password
+      # AV-02/demo: el subproceso de la demo (Operaciones y Demo) persiste con
+      # el rol `runtime`; la UI mantiene ARGENTGOB_DB_ROLE=dashboard.
+      - runtime_password
       - service_token
     ports:
       - "127.0.0.1:8501:8501"

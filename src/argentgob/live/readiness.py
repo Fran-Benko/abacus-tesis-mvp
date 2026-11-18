@@ -28,7 +28,7 @@ from argentgob.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-EXPECTED_HEAD = "011"
+EXPECTED_HEAD = "012"
 DEFAULT_CACHE_SECONDS = 5.0
 
 

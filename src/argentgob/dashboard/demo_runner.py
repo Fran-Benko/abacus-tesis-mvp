@@ -23,6 +23,11 @@ from typing import Any
 _APP_DIR = Path(__file__).resolve().parents[3]  # raíz del repo (…/src/argentgob/dashboard -> /app)
 _DEMO_SCRIPT = _APP_DIR / "scripts" / "demo_end_to_end.py"
 
+# Secreto de runtime montado por compose en el dashboard (AV-02). El dashboard
+# lo recibe para poder lanzar la demo persistente; su rol por defecto sigue
+# siendo `dashboard` (solo lectura) para las consultas de la UI.
+_DEFAULT_RUNTIME_SECRET = "/run/secrets/runtime_password"
+
 # Estado del proceso único por dashboard (un solo run a la vez).
 _state: dict[str, Any] = {
     "proc": None,
@@ -148,6 +153,30 @@ def limpiar_log() -> None:
         _state["escenarios"] = []
 
 
+# Rol de DB que necesita la demo: escribe decisiones, eventos, approvals,
+# predicciones y cadena de auditoría. El dashboard corre con `dashboard` (solo
+# lectura), así que el subproceso NO puede heredar ese rol.
+_DEMO_DB_ROLE = "runtime"
+
+
+def _demo_env() -> dict[str, str]:
+    """Entorno del subproceso de la demo (hereda el del dashboard, con rol que escribe).
+
+    Sin este override el subproceso hereda `ARGENTGOB_DB_ROLE=dashboard` y la
+    demo falla con `permission denied` en `governance_decisions`,
+    `governance_events`, `risk_predictions` y `approval_requests`.
+    """
+    env = os.environ.copy()
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    env.setdefault("ENVIRONMENT", "LOCAL")
+    env.setdefault("LOG_LEVEL", "INFO")
+    env["ARGENTGOB_DB_ROLE"] = _DEMO_DB_ROLE
+    runtime_secret = env.get("ARGENTGOB_RUNTIME_PASSWORD_FILE") or _DEFAULT_RUNTIME_SECRET
+    if Path(runtime_secret).is_file():
+        env["ARGENTGOB_RUNTIME_PASSWORD_FILE"] = runtime_secret
+    return env
+
+
 def start_demo() -> tuple[bool, str]:
     """Lanza la demo `--real` (persistente). No-op si ya hay una corriendo.
 
@@ -160,10 +189,7 @@ def start_demo() -> tuple[bool, str]:
         if proc is not None and proc.poll() is None:
             return False, "Ya hay una demo en ejecución."
 
-    env = os.environ.copy()
-    env.setdefault("PYTHONUNBUFFERED", "1")
-    env.setdefault("ENVIRONMENT", "LOCAL")
-    env.setdefault("LOG_LEVEL", "INFO")
+    env = _demo_env()
 
     proc = subprocess.Popen(
         [sys.executable, str(_DEMO_SCRIPT), "--real"],

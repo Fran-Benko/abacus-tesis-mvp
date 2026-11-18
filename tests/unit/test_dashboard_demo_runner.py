@@ -68,6 +68,35 @@ def test_parse_escenarios_ignora_logs_estructurados():
     assert escenarios[0]["outcome"] == "OK: precio AAPL"
 
 
+def test_demo_env_usa_rol_de_escritura(monkeypatch):
+    """La demo no hereda `dashboard` (solo lectura): necesita escribir evidencia.
+
+    Sin este override el subproceso falla con `permission denied` en
+    `governance_decisions`, `governance_events`, `risk_predictions` y
+    `approval_requests` (regresión observada desde Operaciones y Demo).
+    """
+    monkeypatch.setenv("ARGENTGOB_DB_ROLE", "dashboard")
+    env = demo_runner._demo_env()
+    assert env["ARGENTGOB_DB_ROLE"] == "runtime"
+
+
+def test_demo_env_monta_secreto_de_runtime(monkeypatch, tmp_path):
+    """Si existe el secreto de runtime montado, se propaga al subproceso."""
+    secret = tmp_path / "runtime_password"
+    secret.write_text("x\n", encoding="utf-8")
+    monkeypatch.delenv("ARGENTGOB_RUNTIME_PASSWORD_FILE", raising=False)
+    monkeypatch.setenv("ARGENTGOB_RUNTIME_PASSWORD_FILE", str(secret))
+    env = demo_runner._demo_env()
+    assert env["ARGENTGOB_RUNTIME_PASSWORD_FILE"] == str(secret)
+
+
+def test_demo_env_no_inventa_secreto_inexistente(monkeypatch):
+    """Sin secreto disponible no se apunta a una ruta inexistente."""
+    monkeypatch.delenv("ARGENTGOB_RUNTIME_PASSWORD_FILE", raising=False)
+    env = demo_runner._demo_env()
+    assert not env.get("ARGENTGOB_RUNTIME_PASSWORD_FILE")
+
+
 def test_snapshot_inicial_estado_vacio():
     snap = demo_runner.demo_status_snapshot()
     assert snap["running"] is False

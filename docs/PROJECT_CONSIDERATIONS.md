@@ -108,7 +108,7 @@ podman run --rm --network argentgob-mvp_default `
   python -m alembic current
 ```
 
-Estado actual: migraciones aplicadas hasta `010 (head)` (AV-02: roles de runtime y grants de base; antes H8: roles de consola
+Estado actual: migraciones aplicadas hasta `012 (head)` (AV-02: roles de runtime y grants de base; antes H8: roles de consola
 `viewer`/`auditor`/`approver`/`admin`, vista `v_approval_console` sanitizada,
 grants; capa predictiva: `risk_predictions` 005, `risk_evidence_view` 006 y
 `model_drift_reports` 007).
@@ -450,8 +450,8 @@ Resultado esperado: `===== E2E H8: 23 passed, 0 failed =====`.
 
 ### 8.2 Migraciones aplicadas
 
-`001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 009 → 010 → 011 (head)` — verificable con
-`python -m alembic current` (`011 (head)`).
+`001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 009 → 010 → 011 → 012 (head)` — verificable con
+`python -m alembic current` (`012 (head)`).
 
 | Migración | Contenido |
 |---|---|

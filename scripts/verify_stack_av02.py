@@ -38,7 +38,7 @@ sys.path.insert(0, str(ROOT))
 
 TEST_DB = "argentgob_av02_test"
 BROKEN_DB = "argentgob_av02_broken"
-EXPECTED_HEAD = "011"
+EXPECTED_HEAD = "012"
 
 PASS = 0
 FAIL = 0
