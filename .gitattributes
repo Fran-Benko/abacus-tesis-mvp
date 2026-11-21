@@ -1,0 +1,26 @@
+# Normalización de fin de línea por tipo de archivo.
+#
+# Los scripts de shell deben conservar LF: con CRLF, bash falla con
+# "syntax error near unexpected token `$'do\r'" y los hooks del devcontainer
+# (postCreateCommand / postStartCommand) no arrancan.
+*.sh            text eol=lf
+*.bash          text eol=lf
+containers/*    text eol=lf
+Dockerfile      text eol=lf
+Containerfile   text eol=lf
+
+# Python y documentación: LF en el repo, sin importar el SO del checkout.
+*.py            text eol=lf
+*.md            text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.json          text eol=lf
+*.toml          text eol=lf
+*.ini           text eol=lf
+
+# Binarios y artefactos: nunca normalizar.
+*.gguf          binary
+*.parquet       binary
+*.joblib        binary
+*.png           binary
+*.pdf           binary
