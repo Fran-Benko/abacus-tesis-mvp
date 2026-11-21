@@ -14,7 +14,7 @@
       "visibility": "public"
     }
   },
-  "postCreateCommand": "bash .devcontainer/setup-demo.sh",
+  "onCreateCommand": "bash .devcontainer/setup-demo.sh && bash .devcontainer/build-demo.sh",
   "postStartCommand": "bash .devcontainer/start-demo.sh",
   "hostRequirements": {
     "cpus": 2,

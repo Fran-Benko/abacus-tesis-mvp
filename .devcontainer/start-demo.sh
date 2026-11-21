@@ -2,9 +2,9 @@
 # .devcontainer/start-demo.sh
 # Levanta PostgreSQL + inicializador + dashboard (sin agente ni llama-server).
 #
-# Idempotente y apto para `postStartCommand`: solo construye la primera vez.
-# Reconstruir en cada arranque agotaba el tiempo del hook y la cuota del
-# codespace, porque cada imagen pesa ~1.6 GB.
+# Se ejecuta en `postStartCommand`: en cada arranque del codespace.
+# NO construye imagenes: eso ocurre en `onCreateCommand` (build-demo.sh), de
+# modo que el prebuild las cachea y el arranque es rapido.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -24,13 +24,11 @@ if ! docker info >/dev/null 2>&1; then
     exit 1
 fi
 
-# Construir solo si falta alguna imagen del proyecto.
+# Si el prebuild no cacheo las imagenes, construirlas ahora (una sola vez).
 if ! docker image inspect argentgob-demo-dashboard >/dev/null 2>&1 \
    || ! docker image inspect argentgob-demo-migrator >/dev/null 2>&1; then
-    echo "==> Construyendo imagenes (primera vez, ~5-10 min)..."
+    echo "==> Imagenes ausentes; construyendo (~5-10 min)..."
     $COMPOSE build
-else
-    echo "==> Imagenes presentes; se omite el build."
 fi
 
 echo "==> Levantando servicios..."
