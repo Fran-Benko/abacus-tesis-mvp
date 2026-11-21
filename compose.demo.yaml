@@ -39,6 +39,7 @@ services:
     restart: unless-stopped
 
   migrator:
+    image: argentgob-demo-migrator
     build:
       context: .
       dockerfile: containers/agent.Containerfile
@@ -61,6 +62,7 @@ services:
     restart: "no"
 
   dashboard:
+    image: argentgob-demo-dashboard
     build:
       context: .
       dockerfile: containers/dashboard.Containerfile

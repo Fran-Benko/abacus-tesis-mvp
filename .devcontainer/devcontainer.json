@@ -3,8 +3,7 @@
   "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "version": "latest",
-      "moby": false
+      "version": "latest"
     }
   },
   "forwardPorts": [8501],
@@ -18,7 +17,7 @@
   "postCreateCommand": "bash .devcontainer/setup-demo.sh",
   "postStartCommand": "bash .devcontainer/start-demo.sh",
   "hostRequirements": {
-    "cpus": 4,
+    "cpus": 2,
     "memory": "8gb",
     "storage": "32gb"
   },
