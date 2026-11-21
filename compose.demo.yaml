@@ -1,0 +1,115 @@
+# compose.demo.yaml — despliegue público sin agente ni LLM local.
+#
+# Uso:
+#   podman compose -f compose.demo.yaml up -d
+#   docker compose -f compose.demo.yaml up -d
+#
+# Alcance: PostgreSQL + inicializador + dashboard Streamlit.
+# NO incluye `llama-server` (requiere GPU/CDLA y ~4.9 GB de GGUF) ni `agent`
+# (API de runs que necesita el LLM para admitir trabajo).
+#
+# Vistas operativas sin agente ni LLM (verificado):
+#   Executive Overview, Auditoría y HITL, Inteligencia Predictiva,
+#   Salud del Modelo, Operaciones y Demo (demo determinista, sin LLM).
+# Vistas degradadas (informan el fallo, no rompen):
+#   Finanzas en vivo → "Servicio de runs: API no disponible".
+#
+# Requisitos: `.secrets/{postgres,runtime,dashboard}_password` y
+# `.secrets/service_token` (generar con `python scripts/init_secrets.py`).
+
+name: argentgob-demo
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: argentgob
+      POSTGRES_USER: argentgob_app
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data:Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argentgob_app -d argentgob"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrator:
+    build:
+      context: .
+      dockerfile: containers/agent.Containerfile
+    command: ["python", "-m", "argentgob.db.init"]
+    env_file: .env
+    environment:
+      ARGENTGOB_ADMIN_PASSWORD_FILE: /run/secrets/postgres_password
+      ARGENTGOB_RUNTIME_PASSWORD_FILE: /run/secrets/runtime_password
+      ARGENTGOB_DASHBOARD_PASSWORD_FILE: /run/secrets/dashboard_password
+      ARGENTGOB_DB_HOST: postgres
+      ARGENTGOB_DB_PORT: "5432"
+      ARGENTGOB_DB_NAME: argentgob
+    secrets:
+      - postgres_password
+      - runtime_password
+      - dashboard_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: containers/dashboard.Containerfile
+    command: ["streamlit", "run", "src/argentgob/dashboard/dashboard.py",
+              "--server.port=8501", "--server.address=0.0.0.0",
+              "--server.headless=true"]
+    env_file: .env
+    environment:
+      ARGENTGOB_DASHBOARD_PASSWORD_FILE: /run/secrets/dashboard_password
+      ARGENTGOB_RUNTIME_PASSWORD_FILE: /run/secrets/runtime_password
+      ARGENTGOB_DB_HOST: postgres
+      ARGENTGOB_DB_PORT: "5432"
+      ARGENTGOB_DB_NAME: argentgob
+      ARGENTGOB_DB_ROLE: dashboard
+      # Sin servicio de runs: la vista Finanzas en vivo degrada con aviso.
+      AGENT_API_BASE: "http://agent:8090"
+      AGENT_API_SERVICE_TOKEN_FILE: /run/secrets/service_token
+      IDENTITY_DEVELOPMENT_ONLY: "true"
+      IDENTITY_FIXTURE_ROLES: '{"auditor-1": ["viewer", "auditor"]}'
+      AUTHORIZED_AUDITOR_ROLES: '["auditor"]'
+      RISK_MODEL_DIR: "/app/data/models/risk_model_v1"
+      RISK_CORPUS_PATH: "/app/data/corpus/corpus_v1.parquet"
+    secrets:
+      - dashboard_password
+      - runtime_password
+      - service_token
+    ports:
+      # 0.0.0.0 para que el proxy del Codespace / túnel alcance el puerto.
+      - "8501:8501"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8501/_stcore/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+secrets:
+  postgres_password:
+    file: .secrets/postgres_password
+  runtime_password:
+    file: .secrets/runtime_password
+  dashboard_password:
+    file: .secrets/dashboard_password
+  service_token:
+    file: .secrets/service_token

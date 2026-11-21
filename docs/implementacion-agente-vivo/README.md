@@ -13,6 +13,7 @@ Esta versión convierte la revisión v2 en un paquete implementable con contrato
 | [Catálogo de escenarios](escenarios.md) | Inputs/outputs, perfiles, tools, políticas, guardrails y demos LLM | Antes de implementar un dominio o una demo |
 | [Configuración y despliegue](despliegue.md) | Topología, configuración por servicio, inicialización y fallos | Antes de tocar compose, imágenes o Settings |
 | [Pruebas y cierre](verificacion.md) | Casos identificados, runners, evidencia y aceptación | Al diseñar tests y en todo gate |
+| [Despliegue publico](despliegue-publico.md) | Demo sin agente ni LLM (Codespaces, `compose.demo.yaml`) y limites del plan gratuito | Antes de publicar una demo fuera de la maquina local |
 
 Orden obligatorio: [consideraciones del proyecto](../PROJECT_CONSIDERATIONS.md) → este índice → hito activo → contratos y documentos aplicables → [sesiones recientes](../sessions/). [La hoja de ruta predictiva](../plan-continuacion.md) y [Módulo 2](../modulo2-entrega.md) son contexto histórico/académico, no el backlog de esta ampliación.
 

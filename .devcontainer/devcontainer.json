@@ -1,0 +1,30 @@
+{
+  "name": "ArgentGob-Mesh demo (dashboard sin agente ni LLM)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "moby": false
+    }
+  },
+  "forwardPorts": [8501],
+  "portsAttributes": {
+    "8501": {
+      "label": "ArgentGob Dashboard",
+      "onAutoForward": "openPreview",
+      "visibility": "public"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup-demo.sh",
+  "postStartCommand": "bash .devcontainer/start-demo.sh",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "ms-azuretools.vscode-docker"]
+    }
+  }
+}
