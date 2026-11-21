@@ -2,17 +2,16 @@
 # .devcontainer/start-demo.sh
 # Levanta PostgreSQL + inicializador + dashboard (sin agente ni llama-server).
 #
-# Se ejecuta en `postStartCommand`: en cada arranque del codespace.
-# NO construye imagenes: eso ocurre en `onCreateCommand` (build-demo.sh), de
-# modo que el prebuild las cachea y el arranque es rapido.
+# Se ejecuta en `postStartCommand`, en cada arranque del codespace. Descarga las
+# imagenes publicadas en GHCR (rapido) y solo construye si el pull falla.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 COMPOSE="docker compose -f compose.demo.yaml"
 
-# Espera a que el daemon de Docker-in-Docker acepte conexiones.
-for i in $(seq 1 30); do
+# El daemon de Docker-in-Docker tarda en levantar tras crear el contenedor.
+for i in $(seq 1 45); do
     if docker info >/dev/null 2>&1; then
         break
     fi
@@ -20,14 +19,13 @@ for i in $(seq 1 30); do
 done
 
 if ! docker info >/dev/null 2>&1; then
-    echo "ERROR: el daemon de Docker no respondio en 60 s." >&2
+    echo "ERROR: el daemon de Docker no respondio en 90 s." >&2
     exit 1
 fi
 
-# Si el prebuild no cacheo las imagenes, construirlas ahora (una sola vez).
-if ! docker image inspect argentgob-demo-dashboard >/dev/null 2>&1 \
-   || ! docker image inspect argentgob-demo-migrator >/dev/null 2>&1; then
-    echo "==> Imagenes ausentes; construyendo (~5-10 min)..."
+echo "==> Descargando imagenes de la demo..."
+if ! $COMPOSE pull; then
+    echo "AVISO: pull fallo (imagen no publicada aun); construyendo localmente..."
     $COMPOSE build
 fi
 

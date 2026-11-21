@@ -39,7 +39,9 @@ services:
     restart: unless-stopped
 
   migrator:
-    image: argentgob-demo-migrator
+    # Imagen publicada por .github/workflows/publish-images.yml;
+    # si no existe, compose la construye localmente.
+    image: ${DEMO_REGISTRY:-ghcr.io/fran-benko}/argentgob-demo-migrator:${DEMO_TAG:-latest}
     build:
       context: .
       dockerfile: containers/agent.Containerfile
@@ -62,7 +64,7 @@ services:
     restart: "no"
 
   dashboard:
-    image: argentgob-demo-dashboard
+    image: ${DEMO_REGISTRY:-ghcr.io/fran-benko}/argentgob-demo-dashboard:${DEMO_TAG:-latest}
     build:
       context: .
       dockerfile: containers/dashboard.Containerfile
