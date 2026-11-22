@@ -60,6 +60,31 @@ el dashboard lean los secretos montados, que permanecen con permisos `0600`.
 
 ---
 
+## 2.1 Imagenes publicadas en GHCR (arranque rapido)
+
+Los prebuilds de Codespaces ejecutan `devcontainer up` con
+`--skip-post-create` y `--skip-non-blocking-commands`, por lo que
+`onCreateCommand`, `postCreateCommand` y `postStartCommand` **no se ejecutan
+durante el prebuild**. Verificado en el log del run 44961230041: cero menciones
+de los scripts y ninguna imagen `argentgob-demo-*` construida.
+
+Por eso las imagenes se publican en GHCR con
+`.github/workflows/publish-images.yml` (runners gratuitos en repos publicos):
+
+| Imagen | Tamano |
+|---|---|
+| `ghcr.io/fran-benko/argentgob-demo-dashboard:latest` | 1.56 GB |
+| `ghcr.io/fran-benko/argentgob-demo-migrator:latest` | 1.57 GB |
+
+`compose.demo.yaml` las referencia con
+`${DEMO_REGISTRY:-ghcr.io/fran-benko}/...:${DEMO_TAG:-latest}` y conserva
+`build:` como fallback local. `start-demo.sh` hace `pull` primero y solo
+construye si el pull falla.
+
+Verificado: pull anonimo (sin credenciales) exit 0, stack completo levantado
+desde GHCR sin paso de build, `migrator` exit 0 con revision 012, dashboard
+healthy y demo de Operaciones exit 0 con los 5 escenarios.
+
 ## 3. Opciones de despliegue gratuito en GitHub
 
 ### 3.1 GitHub Codespaces — **la única opción viable**
@@ -115,6 +140,30 @@ Ninguna resuelve el LLM local: para eso hace falta GPU, que no es gratuita en
 ningún proveedor.
 
 ---
+
+## 3.5 Diagnostico dentro del codespace
+
+`scripts/codespace_status.sh` responde las tres preguntas que importan:
+
+```bash
+bash scripts/codespace_status.sh
+```
+
+1. Contenedores arriba (`docker compose ps`).
+2. Streamlit responde en `localhost:8501`.
+3. El puerto reenviado es publico o exige login.
+
+Si reporta `[PRIVADO]`, el puerto esta reenviado pero no compartido. Dos formas
+de abrirlo:
+
+- UI: pestana **PORTS** -> puerto **8501** -> clic derecho -> **Port Visibility**
+  -> **Public**.
+- CLI: `gh codespace ports visibility 8501:public -c <nombre-codespace>`.
+
+`portsAttributes.visibility: "public"` en `devcontainer.json` es una preferencia
+que la UI aplica al reenviar; si el codespace se creo antes de ese cambio, el
+puerto queda privado y hay que cambiarlo a mano una vez.
+
 
 ## 4. Recomendación
 
