@@ -138,6 +138,30 @@ ningún proveedor.
 
 ---
 
+## 3.5 Diagnostico dentro del codespace
+
+`scripts/codespace_status.sh` responde las tres preguntas que importan:
+
+```bash
+bash scripts/codespace_status.sh
+```
+
+1. Contenedores arriba (`docker compose ps`).
+2. Streamlit responde en `localhost:8501`.
+3. El puerto reenviado es publico o exige login.
+
+Si reporta `[PRIVADO]`, el puerto esta reenviado pero no compartido. Dos formas
+de abrirlo:
+
+- UI: pestana **PORTS** -> puerto **8501** -> clic derecho -> **Port Visibility**
+  -> **Public**.
+- CLI: `gh codespace ports visibility 8501:public -c <nombre-codespace>`.
+
+`portsAttributes.visibility: "public"` en `devcontainer.json` es una preferencia
+que la UI aplica al reenviar; si el codespace se creo antes de ese cambio, el
+puerto queda privado y hay que cambiarlo a mano una vez.
+
+
 ## 4. Recomendación
 
 **Para la demo de la tesis:** usar **Codespaces** con `compose.demo.yaml`.
