@@ -8,6 +8,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+export DEMO_UID="$(id -u)"
+export DEMO_GID="$(id -g)"
+
 COMPOSE="docker compose -f compose.demo.yaml"
 
 # El daemon de Docker-in-Docker tarda en levantar tras crear el contenedor.

@@ -42,6 +42,9 @@ services:
     # Imagen publicada por .github/workflows/publish-images.yml;
     # si no existe, compose la construye localmente.
     image: ${DEMO_REGISTRY:-ghcr.io/fran-benko}/argentgob-demo-migrator:${DEMO_TAG:-latest}
+    # Los secretos tipo file de Compose conservan UID/permisos del host.
+    # Usa el UID del Codespace para leer los archivos 0600 sin abrirlos a otros.
+    user: "${DEMO_UID:-1000}:${DEMO_GID:-1000}"
     build:
       context: .
       dockerfile: containers/agent.Containerfile
@@ -65,6 +68,7 @@ services:
 
   dashboard:
     image: ${DEMO_REGISTRY:-ghcr.io/fran-benko}/argentgob-demo-dashboard:${DEMO_TAG:-latest}
+    user: "${DEMO_UID:-1000}:${DEMO_GID:-1000}"
     build:
       context: .
       dockerfile: containers/dashboard.Containerfile
@@ -73,6 +77,7 @@ services:
               "--server.headless=true"]
     env_file: .env
     environment:
+      HOME: /tmp
       ARGENTGOB_DASHBOARD_PASSWORD_FILE: /run/secrets/dashboard_password
       ARGENTGOB_RUNTIME_PASSWORD_FILE: /run/secrets/runtime_password
       ARGENTGOB_DB_HOST: postgres

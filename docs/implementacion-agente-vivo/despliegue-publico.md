@@ -55,6 +55,9 @@ podman compose -f compose.demo.yaml up -d --build
 2. `postCreateCommand` prepara secretos; `postStartCommand` levanta el stack.
 3. Abrir la pestaña **PORTS** → puerto 8501 → visibilidad **Public**.
 
+`start-demo.sh` pasa el UID/GID del Codespace a Compose para que el migrador y
+el dashboard lean los secretos montados, que permanecen con permisos `0600`.
+
 ---
 
 ## 3. Opciones de despliegue gratuito en GitHub

@@ -56,6 +56,43 @@ make agent ASSET=AAPL PROFILE=analyst
 make dashboard  # http://localhost:8501
 ```
 
+## Demo del dashboard en GitHub Codespaces
+
+Codespaces despliega una variante ligera para mostrar el dashboard sin GPU ni
+descarga del modelo GGUF. Este modo levanta PostgreSQL, el inicializador de
+migraciones y Streamlit; no inicia el agente ni `llama-server`. Por eso
+**Finanzas en vivo** informa que la API de runs no está disponible, mientras
+que la demo determinista y las vistas que dependen de PostgreSQL siguen
+disponibles.
+
+Para desplegarla:
+
+1. Abrir el repositorio en GitHub y crear un Codespace con la configuración de
+   [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json)
+   (Python 3.12 y Docker-in-Docker).
+2. Al crear el entorno, [`.devcontainer/setup-demo.sh`](.devcontainer/setup-demo.sh)
+   prepara `.env` y genera las credenciales locales en `.secrets/`;
+   [`.devcontainer/build-demo.sh`](.devcontainer/build-demo.sh) intenta
+   precargar las imágenes. Los valores se generan en el entorno y no deben
+   copiarse al README, al repositorio ni a capturas o logs.
+3. En cada arranque, [`.devcontainer/start-demo.sh`](.devcontainer/start-demo.sh)
+   espera a Docker, descarga las imágenes publicadas en GitHub Container
+   Registry y, si no están disponibles, las construye localmente. Después
+   inicia [`compose.demo.yaml`](compose.demo.yaml) y espera el health check de
+   Streamlit. Compose ejecuta los servicios con el UID/GID del Codespace para
+   que puedan leer los secretos montados sin ampliar sus permisos.
+4. En **PORTS**, abrir el puerto **8501**; la configuración del devcontainer
+   solicita su reenvío público. El dashboard también se puede comprobar en
+   `/_stcore/health`.
+
+El [workflow de publicación de imágenes](.github/workflows/publish-images.yml)
+publica las imágenes del dashboard y del inicializador en GHCR al actualizar
+`main` en rutas relevantes, o mediante ejecución manual. La base de datos de
+esta demo pertenece al entorno Codespaces y no convierte el Codespace en un
+servicio permanente. Para el alcance, los límites y la verificación del
+despliegue, consultar
+[la guía de despliegue público](docs/implementacion-agente-vivo/despliegue-publico.md).
+
 ## Desarrollo local y pruebas
 
 ```bash
